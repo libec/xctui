@@ -14,7 +14,10 @@ func TestFindProject(t *testing.T) {
 		wantErr bool
 	}{
 		{"found in start dir", func(dir string) {
-			os.MkdirAll(filepath.Join(dir, "MyApp.xcodeproj"), 0o755)
+			err := os.MkdirAll(filepath.Join(dir, "MyApp.xcodeproj"), 0o755)
+			if err != nil {
+				t.Fatal(err)
+			}
 		}, "MyApp.xcodeproj", false},
 		{"not found", func(dir string) {}, "", true},
 	}
