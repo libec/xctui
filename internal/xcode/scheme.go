@@ -8,14 +8,22 @@ import (
 
 type xcodebuildlist struct {
 	Project struct {
-		Schemes []string `json:"schemes"`
+		Schemes []Scheme `json:"schemes"`
 	} `json:"project"`
 }
 
 type Scheme struct {
-	// consider https://pkg.go.dev/encoding/json#Unmarshaler
-	// and passing Scheme to xcodebuildlist for easier parsing
 	Name string
+}
+
+func (s *Scheme) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		return err
+	}
+
+	s.Name = name
+	return nil
 }
 
 func (s *Scheme) String() string {
@@ -40,9 +48,5 @@ func parseToSchemes(data []byte) ([]Scheme, error) {
 	if err := json.Unmarshal(data, &parsedRaw); err != nil {
 		return nil, err
 	}
-	var schemes []Scheme
-	for _, s := range parsedRaw.Project.Schemes {
-		schemes = append(schemes, Scheme{Name: s})
-	}
-	return schemes, nil
+	return parsedRaw.Project.Schemes, nil
 }
