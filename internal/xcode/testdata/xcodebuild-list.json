@@ -1,0 +1,20 @@
+{
+  "project" : {
+    "configurations" : [
+      "Debug",
+      "Release"
+    ],
+    "name" : "TheWholePicture",
+    "schemes" : [
+      "TheWholePicture-Debug",
+      "TheWholePicture-Production",
+      "Watch App"
+    ],
+    "targets" : [
+      "TheWholePicture",
+      "TheWholePictureTests",
+      "WatchApp"
+    ]
+  }
+}
+

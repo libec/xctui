@@ -18,4 +18,12 @@ func main() {
 		log.Fatal("there's no .xcodeproj in the current directory.")
 	}
 	fmt.Println(projPath)
+	schemes, err := xcode.ParseSchemes(projPath)
+	if err != nil {
+		log.Fatal("failed to parse schemes from xcodeproj.")
+	}
+	fmt.Printf("schemes found in %s\n", projPath)
+	for _, s := range schemes {
+		fmt.Println(s.String())
+	}
 }
