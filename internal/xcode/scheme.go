@@ -30,9 +30,24 @@ func (s *Scheme) String() string {
 	return fmt.Sprintf("scheme: %s", s.Name)
 }
 
-func ParseSchemes(xcodePath string) ([]Scheme, error) {
+type SchemeGetter interface {
+	Get(xcodePath string) ([]byte, error)
+}
+
+type XcodeSchemeGetter struct {
+}
+
+func (xg *XcodeSchemeGetter) Get(xcodePath string) ([]byte, error) {
 	cmd := exec.Command("xcodebuild", "-list", "-json", "-project", xcodePath)
-	output, err := cmd.Output()
+	return cmd.Output()
+}
+
+func ParseSchemes(xcodePath string) ([]Scheme, error) {
+	return parseSchemesWith(xcodePath, &XcodeSchemeGetter{})
+}
+
+func parseSchemesWith(xcodePath string, jsonReader SchemeGetter) ([]Scheme, error) {
+	output, err := jsonReader.Get(xcodePath)
 	if err != nil {
 		return nil, err
 	}
