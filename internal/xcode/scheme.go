@@ -34,8 +34,7 @@ type SchemeGetter interface {
 	Get(xcodePath string) ([]byte, error)
 }
 
-type XcodeSchemeGetter struct {
-}
+type XcodeSchemeGetter struct{}
 
 func (xg *XcodeSchemeGetter) Get(xcodePath string) ([]byte, error) {
 	cmd := exec.Command("xcodebuild", "-list", "-json", "-project", xcodePath)

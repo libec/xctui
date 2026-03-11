@@ -26,4 +26,9 @@ func main() {
 	for _, s := range schemes {
 		fmt.Println(s.String())
 	}
+	simulators, err := xcode.ParseSimulators()
+	if err != nil {
+		log.Fatal("there are now simulators to run")
+	}
+	fmt.Printf("simulators found: %s", simulators)
 }
