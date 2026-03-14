@@ -6,14 +6,10 @@ import (
 	"testing"
 )
 
-type fakeSchemeGetter struct{}
-
-func (fs *fakeSchemeGetter) Get(xcodePath string) ([]byte, error) {
-	return os.ReadFile("testdata/xcodebuild-list.json")
-}
-
 func TestSchemeParsing(t *testing.T) {
-	schemes, err := parseSchemesWith("xcodePath", &fakeSchemeGetter{})
+	schemes, err := parseSchemesWith("xcodePath", func(_ string) ([]byte, error) {
+		return os.ReadFile("testdata/xcodebuild-list.json")
+	})
 	if err != nil {
 		t.Fatal("parseToSchemes failed to load schemes.")
 	}

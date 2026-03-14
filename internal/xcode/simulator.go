@@ -22,23 +22,14 @@ type rawDevice struct {
 	UDID  string `json:"udid"`
 }
 
-type SimulatorGetter interface {
-	Get() ([]byte, error)
-}
-
-type XcodeSimulatorGetter struct{}
-
-func (xs *XcodeSimulatorGetter) Get() ([]byte, error) {
-	cmd := exec.Command("xcrun", "simctl", "list", "devices", "available", "-j")
-	return cmd.Output()
-}
-
 func ParseSimulators() ([]Simulator, error) {
-	return parseSimulatorsWith(&XcodeSimulatorGetter{})
+	return parseSimulatorsWith(func() ([]byte, error) {
+		return exec.Command("xcrun", "simctl", "list", "devices", "available", "-j").Output()
+	})
 }
 
-func parseSimulatorsWith(simulatorGetter SimulatorGetter) ([]Simulator, error) {
-	output, err := simulatorGetter.Get()
+func parseSimulatorsWith(execCommand func() ([]byte, error)) ([]Simulator, error) {
+	output, err := execCommand()
 	if err != nil {
 		return nil, err
 	}

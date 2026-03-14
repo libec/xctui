@@ -8,14 +8,10 @@ import (
 	"testing"
 )
 
-type fakeSimulatorGetter struct{}
-
-func (fs *fakeSimulatorGetter) Get() ([]byte, error) {
-	return os.ReadFile("testdata/simctl-list.json")
-}
-
 func TestSimulatorParsing(t *testing.T) {
-	simulators, err := parseSimulatorsWith(&fakeSimulatorGetter{})
+	simulators, err := parseSimulatorsWith(func() ([]byte, error) {
+		return os.ReadFile("testdata/simctl-list.json")
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
