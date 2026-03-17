@@ -34,7 +34,7 @@ func TestFindProject(t *testing.T) {
 			if expected != "" {
 				expected = filepath.Join(tmpDir, expected)
 			}
-			if result != expected {
+			if result.Name != expected {
 				t.Errorf("FindProject(%q) = %q, want %q", tmpDir, result, expected)
 			}
 

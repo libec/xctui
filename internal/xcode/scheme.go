@@ -30,8 +30,8 @@ func (s *Scheme) String() string {
 	return fmt.Sprintf("scheme: %s", s.Name)
 }
 
-func ParseSchemes(xcodePath string) ([]Scheme, error) {
-	return parseSchemesWith(xcodePath, func(path string) ([]byte, error) {
+func ParseSchemes(project Project) ([]Scheme, error) {
+	return parseSchemesWith(project.Name, func(path string) ([]byte, error) {
 		return exec.Command("xcodebuild", "-list", "-json", "-project", path).Output()
 	})
 }

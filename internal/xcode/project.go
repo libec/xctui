@@ -5,14 +5,18 @@ import (
 	"path/filepath"
 )
 
-func FindProject(startDir string) (string, error) {
+type Project struct {
+	Name string
+}
+
+func FindProject(startDir string) (Project, error) {
 	res, err := filepath.Glob(filepath.Join(startDir, "*.xcodeproj"))
 	if err != nil {
-		return "", fmt.Errorf("search error: %w", err)
+		return Project{}, fmt.Errorf("search error: %w", err)
 	}
 	if len(res) == 0 {
-		return "", fmt.Errorf("no xcode project found in %s", startDir)
+		return Project{}, fmt.Errorf("no xcode project found in %s", startDir)
 	}
 
-	return res[0], nil
+	return Project{Name: res[0]}, nil
 }
