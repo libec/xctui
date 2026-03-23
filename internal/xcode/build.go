@@ -1,6 +1,7 @@
 package xcode
 
 import (
+	"bufio"
 	"fmt"
 	"os/exec"
 )
@@ -14,8 +15,9 @@ const (
 	StatusFailed    BuildStatus = "Failed"
 )
 
-func Build(xcodeproj Project, scheme Scheme, simulator Simulator) (BuildStatus, error) {
-	output, err := exec.Command(
+func Build(xcodeproj Project, scheme Scheme, simulator Simulator) (<-chan string, error) {
+	buildChannel := make(chan string)
+	command := exec.Command(
 		"xcodebuild",
 		"build",
 		"-project",
@@ -24,11 +26,30 @@ func Build(xcodeproj Project, scheme Scheme, simulator Simulator) (BuildStatus, 
 		scheme.Name,
 		"-destination",
 		fmt.Sprintf("platform=iOS Simulator,id=%s", simulator.UDID),
-	).CombinedOutput()
+	)
 
+	reader, err := command.StdoutPipe()
 	if err != nil {
-		return StatusFailed, fmt.Errorf("build error: %w: %s\n", err, output)
+		return nil, err
+	}
+	if err := command.Start(); err != nil {
+		return nil, err
 	}
 
-	return StatusSucceeded, nil
+	go func() {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			buildChannel <- scanner.Text()
+		}
+
+		if err := scanner.Err(); err != nil {
+			buildChannel <- fmt.Sprintf("scanner error: %v", err)
+		}
+		if err := command.Wait(); err != nil {
+			buildChannel <- fmt.Sprintf("command wait error: %v", err)
+		}
+		close(buildChannel)
+	}()
+
+	return buildChannel, nil
 }

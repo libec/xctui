@@ -69,15 +69,10 @@ func build(scheme, simulator string) {
 	projPath := must(xcode.FindProject(cwd))
 	targetSimulator := must(findSimulator(simulator))
 	targetScheme := must(findScheme(scheme, projPath))
-	status := must(xcode.Build(projPath, targetScheme, targetSimulator))
+	lines := must(xcode.Build(projPath, targetScheme, targetSimulator))
 
-	switch status {
-	case xcode.StatusSucceeded:
-		fmt.Println("Build succeeded")
-	case xcode.StatusFailed:
-		fmt.Println("Build failed")
-	default:
-		fmt.Println("Unknown status")
+	for line := range lines {
+		fmt.Println(line)
 	}
 }
 
