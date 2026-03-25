@@ -3,6 +3,7 @@ package xcode
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os/exec"
 	"sync"
 )
@@ -49,30 +50,11 @@ func Build(xcodeproj Project, scheme Scheme, simulator Simulator) (<-chan string
 
 		// output goroutine
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(outputReader)
-			for scanner.Scan() {
-				buildChannel <- scanner.Text()
-			}
-
-			if err := scanner.Err(); err != nil {
-				buildChannel <- fmt.Sprintf("output scanner error: %v", err)
-			}
-		}()
+		go scanPipe(outputReader, buildChannel, "", &wg)
 
 		// error goroutine
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(errReader)
-			for scanner.Scan() {
-				buildChannel <- fmt.Sprintf("❌ %s", scanner.Text())
-			}
-			if err := scanner.Err(); err != nil {
-				buildChannel <- fmt.Sprintf("error scanner error: %v", err)
-			}
-		}()
+		go scanPipe(errReader, buildChannel, "❌ ", &wg)
 
 		// wait for output and error to finish
 		wg.Wait()
@@ -83,4 +65,16 @@ func Build(xcodeproj Project, scheme Scheme, simulator Simulator) (<-chan string
 	}()
 
 	return buildChannel, nil
+}
+
+func scanPipe(r io.Reader, ch chan<- string, prefix string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		ch <- fmt.Sprintf("%s%s", prefix, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		ch <- fmt.Sprintf("scanner error: %v", err)
+	}
 }
