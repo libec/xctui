@@ -1,3 +1,4 @@
+// Package xcode wraps Apple CLI tools for building and running Xcode projects.
 package xcode
 
 import (
