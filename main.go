@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/libec/xctui/internal/tui"
 	"github.com/libec/xctui/internal/xcode"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		printUsage()
+		runTUI("")
 		return
 	}
 
@@ -24,13 +26,28 @@ func main() {
 		}
 
 		build(os.Args[2], os.Args[3])
+	case len(os.Args) == 2:
+		runTUI(os.Args[1]) // xctui <scheme>
 	default:
 		printUsage()
 	}
 }
 
+func runTUI(scheme string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal("failed to find cwd.")
+	}
+	if err := tui.Run(cwd, scheme); err != nil {
+		fmt.Fprintln(os.Stderr, "xctui:", err)
+		os.Exit(1)
+	}
+}
+
 func printUsage() {
 	fmt.Println("Usage:")
+	fmt.Println("- xctui            (opens the TUI for the project in the current directory)")
+	fmt.Println("- xctui {scheme}   (same, with that scheme selected)")
 	fmt.Println("- xctui info")
 	fmt.Println("- xctui build {scheme} {simulator}")
 }
@@ -42,7 +59,7 @@ func printProjectInfo() {
 	}
 	xcodeProj, err := xcode.FindProject(cwd)
 	if err != nil {
-		log.Fatal("there's no .xcodeproj in the current directory.")
+		log.Fatal("there's no .xcworkspace or .xcodeproj in the current directory.")
 	}
 	fmt.Println(xcodeProj)
 	schemes, err := xcode.ParseSchemes(xcodeProj)
@@ -69,10 +86,13 @@ func build(scheme, simulator string) {
 	projPath := must(xcode.FindProject(cwd))
 	targetSimulator := must(findSimulator(simulator))
 	targetScheme := must(findScheme(scheme, projPath))
-	lines := must(xcode.Build(projPath, targetScheme, targetSimulator))
+	stream := must(xcode.Build(context.Background(), xcode.ActionBuild, projPath, targetScheme, targetSimulator))
 
-	for line := range lines {
+	for line := range stream.Lines {
 		fmt.Println(line)
+	}
+	if err := stream.Wait(); err != nil {
+		log.Fatal(err)
 	}
 }
 

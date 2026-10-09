@@ -1,0 +1,30 @@
+┌[1]─Status─────────────────────┐┌[0]─Detail: ✗ build failed 2s · 2 errors · 1 warning─────────────┐
+│✗ build failed 2s · 2 errors · ││Command line invocation:                                         │
+│Puzzle.xcodeproj               ││    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild│
+└───────────────────────────────┘│                                                                 │
+┌[2]─Schemes · Packages─────────┐│CompileSwift normal arm64 Puzzle/Game.swift                      │
+│  PuzzleKit                    ││Puzzle/Game.swift:3:1: error: cannot find 'x' in scope           │
+│* Puzzle                       ││Puzzle/Game.swift:3:1: error: cannot find 'x' in scope           │
+│                               ││Puzzle/Board.swift:9:5: warning: unused variable 'y'             │
+│                               ││** BUILD FAILED **                                               │
+│                               ││error: exit status 65                                            │
+│                               ││                                                                 │
+└───────────────────────────────┘│                                                                 │
+┌[3]─Destinations───────────────┐│                                                                 │
+│* iPhone 17 Pro 26.5 ●         ││                                                                 │
+│  iPhone Air 26.5              ││                                                                 │
+│  Apple TV 4K tvOS 26.2        ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘│                                                                 │
+┌[4]─Runs───────────────────────┐│                                                                 │
+│* ✗ build    Sep 26 10:00  2s  ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘└─────────────────────────────────────────────────────────────────┘
+b build  r run  t test  c clean  p resolve packages  x stop  0-4/tab focus  e editor  ? help  q quit

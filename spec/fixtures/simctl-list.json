@@ -1,0 +1,79 @@
+{
+  "devices" : {
+    "com.apple.CoreSimulator.SimRuntime.iOS-18-6" : [
+
+    ],
+    "com.apple.CoreSimulator.SimRuntime.tvOS-18-5" : [
+
+    ],
+    "com.apple.CoreSimulator.SimRuntime.watchOS-26-2" : [
+      {
+        "lastBootedAt" : "2026-02-05T12:07:52Z",
+        "dataPath" : "\/Users\/libec\/Library\/Developer\/CoreSimulator\/Devices\/27E8581C-4CD7-45C3-A394-491F2E375A9F\/data",
+        "dataPathSize" : 1529851904,
+        "logPath" : "\/Users\/libec\/Library\/Logs\/CoreSimulator\/27E8581C-4CD7-45C3-A394-491F2E375A9F",
+        "udid" : "27E8581C-4CD7-45C3-A394-491F2E375A9F",
+        "isAvailable" : true,
+        "logPathSize" : 765952,
+        "deviceTypeIdentifier" : "com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-11-46mm",
+        "state" : "Shutdown",
+        "name" : "PairedWatch"
+      }
+    ],
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-1" : [
+
+    ],
+    "com.apple.CoreSimulator.SimRuntime.watchOS-26-1" : [
+
+    ],
+    "com.apple.CoreSimulator.SimRuntime.tvOS-26-1" : [
+
+    ],
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-0" : [
+
+    ],
+    "com.apple.CoreSimulator.SimRuntime.tvOS-26-2" : [
+      {
+        "lastBootedAt" : "2026-03-09T11:36:28Z",
+        "dataPath" : "\/Users\/libec\/Library\/Developer\/CoreSimulator\/Devices\/D640FDA5-7FDA-47F1-928F-E630815BB484\/data",
+        "dataPathSize" : 1771503616,
+        "logPath" : "\/Users\/libec\/Library\/Logs\/CoreSimulator\/D640FDA5-7FDA-47F1-928F-E630815BB484",
+        "udid" : "D640FDA5-7FDA-47F1-928F-E630815BB484",
+        "isAvailable" : true,
+        "logPathSize" : 745472,
+        "deviceTypeIdentifier" : "com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K",
+        "state" : "Booted",
+        "name" : "Apple TV 4K"
+      }
+    ],
+    "com.apple.CoreSimulator.SimRuntime.iOS-17-5" : [
+
+    ],
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-2" : [
+      {
+        "lastBootedAt" : "2026-03-08T17:00:25Z",
+        "dataPath" : "\/Users\/libec\/Library\/Developer\/CoreSimulator\/Devices\/6AFBF4E8-BDB3-408A-9458-21A2A91D7899\/data",
+        "dataPathSize" : 2633875456,
+        "logPath" : "\/Users\/libec\/Library\/Logs\/CoreSimulator\/6AFBF4E8-BDB3-408A-9458-21A2A91D7899",
+        "udid" : "6AFBF4E8-BDB3-408A-9458-21A2A91D7899",
+        "isAvailable" : true,
+        "logPathSize" : 552960,
+        "deviceTypeIdentifier" : "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+        "state" : "Shutdown",
+        "name" : "iPhone 17 Pro"
+      },
+      {
+        "lastBootedAt" : "2026-03-03T06:34:52Z",
+        "dataPath" : "\/Users\/libec\/Library\/Developer\/CoreSimulator\/Devices\/5FE0CE7B-707A-4371-8174-6807E1D0F51B\/data",
+        "dataPathSize" : 3047387136,
+        "logPath" : "\/Users\/libec\/Library\/Logs\/CoreSimulator\/5FE0CE7B-707A-4371-8174-6807E1D0F51B",
+        "udid" : "5FE0CE7B-707A-4371-8174-6807E1D0F51B",
+        "isAvailable" : true,
+        "logPathSize" : 983040,
+        "deviceTypeIdentifier" : "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+        "state" : "Shutdown",
+        "name" : "iPhone+Watch"
+      }
+    ]
+  }
+}

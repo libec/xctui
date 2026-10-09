@@ -1,0 +1,30 @@
+┌[1]─Status─────────────────────┐┌[0]─Detail: ● console com.example.Puzzle · attached──────────────┐
+│● run attached                 ││hello from stdout                                                │
+│Puzzle.xcodeproj               ││[com.apple.UIKit:Application] os_log line                        │
+└───────────────────────────────┘│                                                                 │
+┌[2]─Schemes · Packages─────────┐│                                                                 │
+│  PuzzleKit                    ││                                                                 │
+│* Puzzle                       ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘│                                                                 │
+┌[3]─Destinations───────────────┐│                                                                 │
+│* iPhone 17 Pro 26.5 ●         ││                                                                 │
+│  iPhone Air 26.5              ││                                                                 │
+│  Apple TV 4K tvOS 26.2        ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘│                                                                 │
+┌[4]─Runs───────────────────────┐│                                                                 │
+│* ● console  Sep 26 10:00  …   ││                                                                 │
+│  ✓ run      Sep 26 10:00  2s  ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘└─────────────────────────────────────────────────────────────────┘
+b build  r run  t test  c clean  p resolve packages  x stop  0-4/tab focus  e editor  ? help  q quit

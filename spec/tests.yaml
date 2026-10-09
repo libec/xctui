@@ -1,0 +1,627 @@
+# xctui — expected outputs for given inputs.
+#
+# SPEC.md has the rules; this file has the cases; INSTALL.md says how to turn them into tests.
+# Strings are exact. Lists are ordered. `fixtures/<name>` is a captured tool output in the
+# fixtures folder; `screens/<name>` is an exact terminal screen (ANSI stripped) in screens/.
+# 215 cases in 12 groups; INSTALL.md lists the count per group and subgroup. A harness that runs
+# fewer has skipped some. Temporary folders must be real paths (on macOS /var/folders is a
+# symlink to /private/var/folders); `<tmp>` stands for that real path.
+# A `tree` lists paths relative to a temporary folder: a trailing `/` is a folder, a mapping
+# value is a file's content. In a `steps` list, an item that is itself a list (a YAML alias to
+# another case's steps) is spliced in at that point.
+
+container:                                    # SPEC 3. `want` is the found container relative to the temporary folder; the program returns the absolute path
+  - name: found in the start folder
+    tree: [MyApp.xcodeproj/]
+    want: MyApp.xcodeproj
+  - name: workspace preferred over project
+    tree: [MyApp.xcodeproj/, MyApp.xcworkspace/]
+    want: MyApp.xcworkspace
+  - name: one folder down, skipping the project's inner workspace
+    tree: [App/App.xcodeproj/project.xcworkspace/]
+    want: App/App.xcodeproj
+  - name: start folder wins over a subfolder
+    tree: [Top.xcodeproj/, Sub/Sub.xcworkspace/]
+    want: Top.xcodeproj
+  - name: not found
+    tree: []
+    error: "no .xcworkspace or .xcodeproj found in <dir> or one folder down"
+
+container_args:                               # SPEC 3
+  - {container: /src/MyApp.xcworkspace, want: [-workspace, /src/MyApp.xcworkspace]}
+  - {container: /src/MyApp.xcodeproj, want: [-project, /src/MyApp.xcodeproj]}
+
+schemes:                                      # SPEC 4
+  tree: &schemes_tree
+    App/App.xcodeproj/xcshareddata/xcschemes/Mine.xcscheme: ""
+    App/App.xcodeproj/xcuserdata/me.xcuserdatad/xcschemes/App.xcscheme: ""
+    packages/Net/Package.swift: "let package = Package(name: \"Net\", products: [.library(name: \"Net\", targets: [\"Net\"]), .library(\n    name: \"NetMocks\", targets: [])])"
+    packages/Tool/Package.swift: "let package = Package(\n    name: \"Tool\",\n    targets: [])"
+    packages/Net/.build/checkouts/Remote/Package.swift: '.library(name: "Remote")'
+  files_on_disk:                              # 4.1
+    - {container: App/App.xcodeproj, want: [App, Mine]}
+    - {container: App/App.xcworkspace, want: [App, Mine]}   # the sibling project's files
+  package_products:                           # 4.3, root = the tree's folder
+    want: [Net, NetMocks, Tool]
+  list_fallback:                              # 4.2
+    - {fixture: fixtures/xcodebuild-list.json, want: [TheWholePicture-Debug, TheWholePicture-Production, "Watch App"]}
+    - {fixture: fixtures/xcodebuild-list-workspace.json, want: [SyncUps]}
+  merge:                                      # 4.4
+    - listed: [Net, App]
+      products: [Net, NetMocks, Tool]
+      want:
+        - {name: App, package: false}
+        - {name: Net, package: true}
+        - {name: NetMocks, package: true}
+        - {name: Tool, package: true}
+  default:                                    # 4.5
+    - {container: /src/Puzzle.xcworkspace, schemes: [Alamofire, Puzzle], want: Puzzle}
+    - {container: /src/Puzzle.xcodeproj, schemes: [App-Debug, App-Release], want: App-Debug}
+    - {container: /src/Puzzle.xcodeproj, schemes: [], want: null}
+  display:                                    # 4.6
+    - {name: Puzzle, package: false, want: "scheme: Puzzle"}
+    - {name: Net, package: true, want: "package: Net"}
+
+destinations:                                 # SPEC 5
+  runtime_name:                               # 5.2
+    - {id: com.apple.CoreSimulator.SimRuntime.iOS-18-2, want: "iOS 18.2"}
+    - {id: com.apple.CoreSimulator.SimRuntime.iOS-26-0, want: "iOS 26.0"}
+    - {id: com.apple.CoreSimulator.SimRuntime.watchOS-26-2, want: "watchOS 26.2"}
+    - {id: com.apple.CoreSimulator.SimRuntime.xrOS-2-0, want: "xrOS 2.0"}
+    - {id: something.else, want: something.else}
+  platform:                                   # 5.3
+    - {runtime: "iOS 26.5", want: iOS}
+    - {runtime: "xrOS 2.0", want: visionOS}
+    - {runtime: "", want: iOS}
+  destination_and_platform_name:              # 5.6
+    - {runtime: "iOS 26.5", udid: A, destination: "platform=iOS Simulator,id=A", platform_name: iphonesimulator}
+    - {runtime: "tvOS 26.2", udid: B, destination: "platform=tvOS Simulator,id=B", platform_name: appletvsimulator}
+    - {runtime: "watchOS 26.2", udid: C, destination: "platform=watchOS Simulator,id=C", platform_name: watchsimulator}
+    - {runtime: "xrOS 26.0", udid: D, destination: "platform=visionOS Simulator,id=D", platform_name: xrsimulator}
+    - {mac: true, destination: "platform=macOS", platform_name: macosx}
+  sort:                                       # 5.4, names in order after sorting
+    - name: newest runtime first, simctl order kept within a runtime
+      input:
+        - {name: iPhone 16, runtime: "iOS 18.2", state: Shutdown}
+        - {name: iPhone 17 Pro, runtime: "iOS 26.5", state: Shutdown}
+        - {name: iPhone Air, runtime: "iOS 26.5", state: Shutdown}
+        - {name: iPhone 17, runtime: "iOS 26.10", state: Shutdown}
+      want: [iPhone 17, iPhone 17 Pro, iPhone Air, iPhone 16]
+    - name: booted first, even on an older runtime
+      input:
+        - {name: iPhone 17 Pro, runtime: "iOS 26.5", state: Shutdown}
+        - {name: iPhone 16, runtime: "iOS 18.2", state: Booted}
+      want: [iPhone 16, iPhone 17 Pro]
+    - name: platforms in order iOS, tvOS, watchOS
+      input:
+        - {name: PairedWatch, runtime: "watchOS 26.2", state: Shutdown}
+        - {name: Apple TV 4K, runtime: "tvOS 26.2", state: Shutdown}
+        - {name: iPhone 17 Pro, runtime: "iOS 26.2", state: Shutdown}
+      want: [iPhone 17 Pro, Apple TV 4K, PairedWatch]
+  default:                                    # 5.5
+    - name: booted iOS wins
+      input: [{name: iPad mini, runtime: "iOS 26.4", state: Booted}, {name: iPad Air, runtime: "iOS 26.5"}, {name: iPhone 17 Pro, runtime: "iOS 26.5"}]
+      want: iPad mini
+    - name: a booted Apple TV does not beat an iPhone
+      input: [{name: Apple TV, runtime: "tvOS 26.2", state: Booted}, {name: iPad Air, runtime: "iOS 26.5"}, {name: iPhone 17 Pro, runtime: "iOS 26.5"}]
+      want: iPhone 17 Pro
+    - name: first iPhone
+      input: [{name: iPad Air, runtime: "iOS 26.5"}, {name: iPhone 17 Pro, runtime: "iOS 26.5"}]
+      want: iPhone 17 Pro
+    - name: anything when no iPhone
+      input: [{name: iPad Air, runtime: "iOS 26.5"}]
+      want: iPad Air
+    - name: none
+      input: []
+      want: null
+  parse:                                      # 5.1 + 5.4: My Mac, then booted, then iOS before tvOS before watchOS
+    fixture: fixtures/simctl-list.json
+    want:
+      - {name: My Mac, runtime: macOS, state: "", udid: mac}
+      - {name: Apple TV 4K, runtime: "tvOS 26.2", state: Booted, udid: D640FDA5-7FDA-47F1-928F-E630815BB484}
+      - {name: iPhone 17 Pro, runtime: "iOS 26.2", state: Shutdown, udid: 6AFBF4E8-BDB3-408A-9458-21A2A91D7899}
+      - {name: iPhone+Watch, runtime: "iOS 26.2", state: Shutdown, udid: 5FE0CE7B-707A-4371-8174-6807E1D0F51B}
+      - {name: PairedWatch, runtime: "watchOS 26.2", state: Shutdown, udid: 27E8581C-4CD7-45C3-A394-491F2E375A9F}
+  labels:                                     # 5.6
+    - {name: iPhone 17 Pro, runtime: "iOS 26.5", state: Booted, all: "iPhone 17 Pro 26.5 ●", one_platform: "iPhone 17 Pro 26.5 ●"}
+    - {name: Apple TV 4K, runtime: "tvOS 26.2", state: Shutdown, all: "Apple TV 4K tvOS 26.2", one_platform: "Apple TV 4K 26.2"}
+    - {name: My Mac, runtime: macOS, mac: true, all: "My Mac macOS", one_platform: "My Mac macOS"}
+
+commands:                                     # SPEC 6, 7, 8, 9 — exact argv, environment additions and the cancel signal
+  xcodebuild_args:                            # 6.3, scheme Puzzle
+    - {container: Puzzle.xcodeproj, udid: ABC-123, runtime: "", want: [-project, Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=ABC-123"]}
+    - {container: Puzzle.xcworkspace, udid: ABC-123, runtime: "", want: [-workspace, Puzzle.xcworkspace, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=ABC-123"]}
+    - {container: X.xcodeproj, mac: true, want: [-project, X.xcodeproj, -scheme, Puzzle, -destination, platform=macOS]}
+  actions:                                    # 7, container /src/Puzzle.xcodeproj, scheme Puzzle, destination udid A (iOS)
+    - {job: build, argv: [xcodebuild, build, -project, /src/Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=A"], signal: SIGTERM}
+    - {job: test, argv: [xcodebuild, test, -project, /src/Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=A"], signal: SIGTERM}
+    - {job: clean, argv: [xcodebuild, clean, -project, /src/Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=A"], signal: SIGTERM}
+    - {job: resolve, argv: [xcodebuild, -resolvePackageDependencies, -project, /src/Puzzle.xcodeproj], signal: SIGTERM}
+  list_schemes: {argv: [xcodebuild, -list, -json, -project, /src/Puzzle.xcodeproj]}
+  list_simulators: {argv: [xcrun, simctl, list, devices, available, -j]}
+  rename: {udid: ABC-123, name: Work phone, argv: [xcrun, simctl, rename, ABC-123, Work phone]}   # 5.7
+  build_settings: {argv: [xcodebuild, -showBuildSettings, -json, -project, /src/Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=A"]}
+  install:                                    # 9.1, udid ABC-123, app /dd/Puzzle.app; `calls` are the commands run, in order
+    - name: shut down simulator
+      boot_error: null
+      calls:
+        - [xcrun, simctl, boot, ABC-123]
+        - [open, -a, Simulator]
+        - [xcrun, simctl, install, ABC-123, /dd/Puzzle.app]
+      error: false
+    - name: already booted
+      boot_error: "Unable to boot device in current state: Booted"
+      calls:
+        - [xcrun, simctl, boot, ABC-123]
+        - [open, -a, Simulator]
+        - [xcrun, simctl, install, ABC-123, /dd/Puzzle.app]
+      error: false
+    - name: boot fails
+      boot_error: "Invalid device"
+      calls:
+        - [xcrun, simctl, boot, ABC-123]
+      error: true
+  launch: {argv: [xcrun, simctl, launch, --console-pty, --terminate-running-process, ABC-123, com.example.Puzzle], env: [SIMCTL_CHILD_OS_ACTIVITY_DT_MODE=YES], signal: SIGINT}
+  launch_mac: {executable: /dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja, argv: [/dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja], env: [OS_ACTIVITY_DT_MODE=YES], signal: SIGTERM}
+  log_stream:                                 # 9.3
+    - simulator: {udid: ABC-123, app: /dd/Debug-iphonesimulator/Puzzle.app, executable: /dd/Debug-iphonesimulator/Puzzle.app/Puzzle}
+      argv: [xcrun, simctl, spawn, ABC-123, log, stream, --style, compact, --level, debug, --predicate, 'process == "Puzzle" AND senderImagePath CONTAINS "/Puzzle.app/" AND messageType == debug AND NOT subsystem BEGINSWITH "com.apple.Previews"']
+      signal: SIGTERM
+    - mac: {app: /dd/Debug/ClipNinja.app, executable: /dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja}
+      argv: [xcrun, log, stream, --style, compact, --level, debug, --predicate, 'process == "ClipNinja" AND senderImagePath CONTAINS "/ClipNinja.app/" AND messageType == debug AND NOT subsystem BEGINSWITH "com.apple.Previews"']
+      signal: SIGTERM
+
+stream:                                       # SPEC 2, 6.1, 6.2
+  scan_lines:
+    - {input: "line one\nline two\n", want: [line one, line two]}
+    - {input: "line one\r\nline two\r\n", want: [line one, line two]}
+    - {input: "<100000 x characters>\nafter\n", want: ["<the 100000 x characters>", after]}
+  exit_code:
+    script: "echo out; echo err >&2; exit 3"
+    lines: [out, err]                         # one pipe: the order they were written
+    wait: exit status 3
+  cancel:                                     # the trap runs, so the signal (not SIGKILL) reached the process, within 5 s
+    - {signal: SIGINT, script: "trap 'echo stopped; exit 130' INT; echo ready; while :; do sleep 0.1; done", after_ready_and_cancel: [stopped]}
+    - {signal: SIGTERM, script: "trap 'echo stopped; exit 130' TERM; echo ready; while :; do sleep 0.1; done", after_ready_and_cancel: [stopped]}
+  one_shot_error:
+    script: "echo the reason >&2; exit 66"
+    error_contains: [exit status 66, the reason]
+
+build_settings:                               # SPEC 8
+  - {name: app target, fixture: fixtures/xcodebuild-showbuildsettings.json, platform: iphonesimulator,
+     want: {app: /Users/libec/Library/Developer/Xcode/DerivedData/Puzzle-gkvusrxoqndrzjdchtgruoqfsjhc/Build/Products/Debug-iphonesimulator/Puzzle.app,
+            bundle: com.example.Puzzle,
+            executable: /Users/libec/Library/Developer/Xcode/DerivedData/Puzzle-gkvusrxoqndrzjdchtgruoqfsjhc/Build/Products/Debug-iphonesimulator/Puzzle.app/Puzzle}}
+  - {name: test target listed before the app, fixture: fixtures/xcodebuild-showbuildsettings-test.json, platform: iphonesimulator,
+     want: {app: /Users/libec/Library/Developer/Xcode/DerivedData/Puzzle-gkvusrxoqndrzjdchtgruoqfsjhc/Build/Products/Debug-iphonesimulator/Puzzle.app,
+            bundle: com.example.Puzzle,
+            executable: /Users/libec/Library/Developer/Xcode/DerivedData/Puzzle-gkvusrxoqndrzjdchtgruoqfsjhc/Build/Products/Debug-iphonesimulator/Puzzle.app/Puzzle}}
+  - {name: macOS app, fixture: fixtures/xcodebuild-showbuildsettings-macos.json, platform: macosx,
+     want: {app: /Users/libec/Library/Developer/Xcode/DerivedData/ClipNinja-heohwiqbpzjnicduuygqhwasdobf/Build/Products/Debug/ClipNinja.app,
+            bundle: ninja.clip.app,
+            executable: /Users/libec/Library/Developer/Xcode/DerivedData/ClipNinja-heohwiqbpzjnicduuygqhwasdobf/Build/Products/Debug/ClipNinja.app/Contents/MacOS/ClipNinja}}
+  - {name: iOS settings asked for a Mac app, fixture: fixtures/xcodebuild-showbuildsettings.json, platform: macosx, error: "the scheme builds no macosx app"}
+  - {name: no app target, json: '[{"target": "Lib", "buildSettings": {"WRAPPER_EXTENSION": "framework", "PLATFORM_NAME": "iphonesimulator"}}]', platform: iphonesimulator, error: "the scheme builds no iphonesimulator app"}
+  - {name: device build, json: '[{"target": "App", "buildSettings": {"WRAPPER_EXTENSION": "app", "PLATFORM_NAME": "iphoneos"}}]', platform: iphonesimulator, error: "the scheme builds no iphonesimulator app"}
+  - {name: missing bundle id, json: '[{"target": "App", "buildSettings": {"WRAPPER_EXTENSION": "app", "PLATFORM_NAME": "iphonesimulator", "BUILT_PRODUCTS_DIR": "/b", "FULL_PRODUCT_NAME": "App.app", "EXECUTABLE_PATH": "App.app/App"}}]', platform: iphonesimulator, error: "target App: missing PRODUCT_BUNDLE_IDENTIFIER"}
+
+log:                                          # SPEC 9.3
+  clean_line:
+    - {line: "2026-09-25 10:23:23.361 Df Puzzle[19921:134cebb] [com.apple.UIKit:Application] Deactivation reason added", want: "10:23:23.361 [com.apple.UIKit:Application] Deactivation reason added", keep: true}
+    - {line: "2026-09-25 10:23:23.363 A  Puzzle[19921:134cebb] (CoreFoundation) Loading Preferences", want: "10:23:23.363 (CoreFoundation) Loading Preferences", keep: true}
+    - {line: 'Filtering the log data using "process == \"Puzzle\""', want: "", keep: false}
+    - {line: "Timestamp               Ty Process[PID:TID]", want: "", keep: false}
+    - {line: "getpwuid_r did not find a match for uid 501", want: "", keep: false}
+    - {line: "a line without the prefix", want: "a line without the prefix", keep: true}
+  mirror_line:                                # 9.4, os_log lines the app mirrors to stderr
+    - {line: "2026-09-28 10:33:35.230501+0200 Puzzle[9836:34476303] [Session] Token expired", want: "10:33:35.230 [Session] Token expired", mirrored: true}
+    - {line: "2026-09-28 10:33:35.230501+0200 My App[9836:34476303] [Application] Deactivation reason added", want: "10:33:35.230 [Application] Deactivation reason added", mirrored: true}
+    - {line: "hello from stdout", want: "hello from stdout", mirrored: false}
+
+processing:                                   # SPEC 10
+  kind:                                       # 10.1
+    - {line: "/src/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope", want: error}
+    - {line: "/src/Puzzle/Board.swift:9:5: warning: unused variable", want: warning}
+    - {line: " 13   -[Xcode3CommandLineBuildTool doBuildForBuildAction:timingSection:colorize:colorizeFailure:error:] (in Xcode3Core)", want: plain}
+    - {line: "** BUILD FAILED **", want: plain}
+    - {line: "error: exit status 65", want: error}
+  issues:                                     # 10.1, after appending in order
+    lines:
+      - "CompileSwift normal arm64 /src/Puzzle/Game.swift"
+      - "/src/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"
+      - "/src/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"
+      - "/src/Puzzle/Board.swift:9:5: warning: unused variable"
+      - "** BUILD FAILED **"
+    want_issues:
+      - "/src/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"
+      - "/src/Puzzle/Board.swift:9:5: warning: unused variable"
+    errors: 1
+    warnings: 1
+    log_lines: 5
+  strip_paths:                                # 10.2
+    - {container: /src/Puzzle.xcodeproj, line: "/src/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope", want: "Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"}
+    - {container: /src/App/App.xcworkspace, line: "ld: /src/App/x.o and /src/App/y.o", want: "ld: x.o and y.o"}
+  short:                                      # 10.4
+    - {ms: 5300, want: 5s}
+    - {ms: 1925000, want: "32m 5s"}
+    - {ms: 3723000, want: "1h 2m 3s"}
+    - {ms: 0, want: 0s}
+  when:                                       # `now` is the clock at render time
+    - {now: "2026-09-27 21:00", started: "2026-09-27 20:02", want: "20:02"}
+    - {now: "2026-09-27 21:00", started: "2026-09-26 10:00", want: "Sep 26 10:00"}
+  count:
+    - {n: 1, noun: error, want: "1 error"}
+    - {n: 0, noun: error, want: "0 errors"}
+    - {n: 2, noun: warning, want: "2 warnings"}
+  marks:                                      # 10.3
+    - {outcome: succeeded, want: "✓"}
+    - {outcome: exited, want: "✓"}
+    - {outcome: failed, want: "✗"}
+    - {outcome: stopped, want: "■"}
+    - {outcome: running, attached: true, want: "●"}
+    - {outcome: running, attached: false, want: "⟳"}
+  summaries:                                  # 10.5
+    - {kind: build, outcome: running, status: "", want: "⟳ build running"}
+    - {kind: run, outcome: running, status: building, want: "⟳ run building"}
+    - {kind: run, outcome: running, status: installing, want: "⟳ run installing"}
+    - {kind: run, outcome: running, status: attached, want: "● run attached"}
+    - {kind: build, outcome: failed, elapsed_ms: 2000, errors: 2, warnings: 1, want: "✗ build failed 2s · 2 errors · 1 warning"}
+    - {kind: run, outcome: exited, elapsed_ms: 2000, errors: 0, warnings: 0, want: "✓ run exited 2s · 0 errors · 0 warnings"}
+    - {kind: test, outcome: stopped, elapsed_ms: 65000, errors: 0, warnings: 3, want: "■ test stopped 1m 5s · 0 errors · 3 warnings"}
+  build_summaries:
+    - {kind: run, build_outcome: "", want: "⟳ run building"}
+    - {kind: run, build_outcome: succeeded, build_elapsed_ms: 2000, errors: 0, warnings: 0, want: "✓ run build succeeded 2s · 0 errors · 0 warnings"}
+    - {kind: build, outcome: failed, elapsed_ms: 2000, errors: 2, warnings: 1, want: "✗ build failed 2s · 2 errors · 1 warning"}   # same as summary()
+  console_summaries:                          # a run with a console phase is attached while it runs (SPEC 10.3)
+    - {outcome: running, app: com.example.Puzzle, want: "● console com.example.Puzzle · attached"}
+    - {outcome: exited, app: com.example.Puzzle, want: "✓ console com.example.Puzzle · exited"}
+    - {outcome: stopped, app: com.example.Puzzle, want: "■ console com.example.Puzzle · stopped"}
+  runs_rows:                                  # 10.6, started 2026-09-26 10:00 (not today)
+    - {kind: build, outcome: running, want: "⟳ build    Sep 26 10:00  …"}
+    - {kind: build, outcome: failed, elapsed_ms: 2000, want: "✗ build    Sep 26 10:00  2s"}
+    - {kind: run, build_outcome: "", want: "⟳ run      Sep 26 10:00  …"}
+    - {kind: run, build_outcome: succeeded, build_elapsed_ms: 2000, outcome: running, want: "✓ run      Sep 26 10:00  2s"}
+    - {kind: run, outcome: running, attached: true, console_row: true, want: "● console  Sep 26 10:00  …"}
+    - {kind: run, outcome: exited, elapsed_ms: 2000, console_row: true, want: "✓ console  Sep 26 10:00  2s"}
+    - {kind: resolve, outcome: succeeded, elapsed_ms: 3000, want: "✓ resolve  Sep 26 10:00  3s"}
+
+cli:                                          # SPEC 11
+  # Unless a case gives its own `tree`, it runs in a temporary folder holding this one:
+  tree: &cli_tree [Puzzle.xcodeproj/xcshareddata/xcschemes/Puzzle.xcscheme]
+  usage:                                      # a subcommand without its arguments; a lone unknown word is a scheme and opens the TUI
+    tree: *cli_tree
+    args: [build]
+    exit: 2
+    stderr_starts_with: "Usage:"
+  project:
+    tree: [App/App.xcodeproj/]
+    args: [project]
+    stdout: "<tmp>/App/App.xcodeproj\n"
+    exit: 0
+  no_container:
+    tree: []
+    args: [project]
+    stderr: "xctui: no .xcworkspace or .xcodeproj found in <tmp> or one folder down\n"
+    exit: 1
+  schemes:
+    tree: *schemes_tree
+    args: [schemes]
+    stdout: |
+      * App
+        Mine
+        Net (package)
+        NetMocks (package)
+        Tool (package)
+    exit: 0
+  destinations:                               # simctl replaced by fixtures/simctl-list.json; needs no project
+    tree: []
+    args: [destinations]
+    stdout: |2
+        My Mac macOS  mac
+        Apple TV 4K tvOS 26.2 ●  D640FDA5-7FDA-47F1-928F-E630815BB484
+      * iPhone 17 Pro 26.2  6AFBF4E8-BDB3-408A-9458-21A2A91D7899
+        iPhone+Watch 26.2  5FE0CE7B-707A-4371-8174-6807E1D0F51B
+        PairedWatch watchOS 26.2  27E8581C-4CD7-45C3-A394-491F2E375A9F
+    exit: 0
+  settings:                                   # xcodebuild -showBuildSettings replaced by fixtures/xcodebuild-showbuildsettings.json; simctl by fixtures/simctl-list.json
+    tree: *cli_tree
+    args: [settings, Puzzle, iPhone 17 Pro]
+    stdout: |
+      app: /Users/libec/Library/Developer/Xcode/DerivedData/Puzzle-gkvusrxoqndrzjdchtgruoqfsjhc/Build/Products/Debug-iphonesimulator/Puzzle.app
+      bundle: com.example.Puzzle
+      executable: /Users/libec/Library/Developer/Xcode/DerivedData/Puzzle-gkvusrxoqndrzjdchtgruoqfsjhc/Build/Products/Debug-iphonesimulator/Puzzle.app/Puzzle
+    exit: 0
+  scheme_not_found:
+    tree: *cli_tree
+    args: [build, Nope]
+    stderr: "xctui: scheme \"Nope\" not found\n"
+    exit: 1
+  destination_not_found:
+    tree: *cli_tree
+    args: [build, Puzzle, "iPhone 3G"]
+    stderr: "xctui: destination \"iPhone 3G\" not found\n"
+    exit: 1
+  # The build cases run in <tmp> with the cli_tree above, so the container is <tmp>/Puzzle.xcodeproj
+  # and 10.2 strips "<tmp>/". The fake xcodebuild prints the lines, then sleeps 1.5 s before
+  # exiting, so the summary's rounded duration reads 2s.
+  build_failed:
+    tree: *cli_tree
+    args: [build, Puzzle]
+    tool_output:
+      - "CompileSwift normal arm64 <tmp>/Puzzle/Game.swift"
+      - "<tmp>/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"
+      - "<tmp>/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"
+      - "<tmp>/Puzzle/Board.swift:9:5: warning: unused variable 'y'"
+      - "** BUILD FAILED **"
+    tool_exit: 65
+    stdout: |
+      CompileSwift normal arm64 Puzzle/Game.swift
+      Puzzle/Game.swift:3:1: error: cannot find 'x' in scope
+      Puzzle/Game.swift:3:1: error: cannot find 'x' in scope
+      Puzzle/Board.swift:9:5: warning: unused variable 'y'
+      ** BUILD FAILED **
+      error: exit status 65
+    stderr: "✗ build failed 2s · 2 errors · 1 warning\n"
+    exit: 65
+  build_succeeded:
+    tree: *cli_tree
+    args: [build, Puzzle]
+    tool_output: ["CompileSwift normal arm64 <tmp>/Puzzle/Game.swift", "** BUILD SUCCEEDED **"]
+    tool_exit: 0
+    stdout: |
+      CompileSwift normal arm64 Puzzle/Game.swift
+      ** BUILD SUCCEEDED **
+    stderr: "✓ build succeeded 2s · 0 errors · 0 warnings\n"
+    exit: 0
+  build_stopped:                              # the fake prints the first line and waits; Ctrl-C (SIGINT to xctui) 1.5 s after that first line reaches stdout; the fake traps SIGTERM, prints the second line and exits
+    tree: *cli_tree
+    args: [build, Puzzle]
+    tool_output: ["CompileSwift normal arm64 <tmp>/Puzzle/Game.swift", "** BUILD INTERRUPTED **"]
+    stdout: |
+      CompileSwift normal arm64 Puzzle/Game.swift
+      ** BUILD INTERRUPTED **
+    stderr: "■ build stopped 2s · 0 errors · 0 warnings\n"
+    exit: 130
+  run_exited:                                 # SPEC 11 `run`: the fake build succeeds (lines, 1.5 s, exit 0); settings from fixtures/xcodebuild-showbuildsettings.json;
+                                              # boot, open and install fakes exit 0; `simctl launch` prints launch_output and exits by itself launch_exit_after_s later;
+                                              # `log stream` prints log_output and waits for SIGTERM, which the program must send when the run ends
+    tree: *cli_tree
+    args: [run, Puzzle]
+    tool_output: ["CompileSwift normal arm64 <tmp>/Puzzle/Game.swift", "** BUILD SUCCEEDED **"]
+    tool_exit: 0
+    launch_output: ["hello from stdout"]
+    launch_exit_after_s: 1.0                  # the log stream fake prints 0.5 s after it starts; the app must still be up then
+    log_output: ['Filtering the log data using "process == \"Puzzle\""', "2026-09-26 10:00:03.361 Df Puzzle[19921:134cebb] [com.apple.UIKit:Application] os_log line"]
+    stdout_matches:                           # one regular expression per line; the whole stdout, in order
+      - '^CompileSwift normal arm64 Puzzle/Game\.swift$'
+      - '^\*\* BUILD SUCCEEDED \*\*$'
+      - '^▸ Installing and launching on iPhone 17 Pro$'
+      - '^▸ Launched com\.example\.Puzzle$'
+      - '^\d\d:\d\d:\d\d\.\d\d\d hello from stdout$'
+      - '^10:00:03\.361 \[com\.apple\.UIKit:Application\] os_log line$'
+    stderr_matches:                           # the durations depend on the machine's load; the flow is what this case checks
+      - '^✓ run build succeeded \d+s · 0 errors · 0 warnings$'
+      - '^✓ run exited \d+s · 0 errors · 0 warnings$'
+    exit: 0
+    no_process_left: true                     # the log stream fake was terminated with the run
+
+tui:                                          # SPEC 12
+  # Every screen case starts from this state unless it says otherwise.
+  fixture:
+    container: /src/Puzzle.xcodeproj
+    schemes: [{name: PuzzleKit}, {name: Puzzle}, {name: Net, package: true}]
+    destinations:
+      - {name: iPhone 17 Pro, runtime: "iOS 26.5", state: Booted, udid: A}
+      - {name: iPhone Air, runtime: "iOS 26.5", state: Shutdown, udid: B}
+      - {name: Apple TV 4K, runtime: "tvOS 26.2", state: Shutdown, udid: C}
+    prefs: none
+    history: none
+    terminal_background: unknown          # the selection style is reverse video; invisible once ANSI is stripped
+    clock:
+      jobs_start: "2026-09-26 10:00:00"   # not today, so Runs rows read "Sep 26 10:00"
+      finished_elapsed_ms: 2000           # every finished job and build took 2 s
+      stdout_line_arrives: "10:00:02.500"
+      # "today" for Runs rows is the real clock (SPEC 10.4); on 2026-09-26 itself these screens are wrong.
+  # Steps: resize [w, h]; key <name>; lines [..] (the job's process output); done ok | done "<error>";
+  # launched {app, logs} (install and launch succeeded, the log stream started); app_lines [..];
+  # log_lines [..]; and the two bare strings log_done and app_done (those streams ended).
+  # Screens are compared after stripping ANSI sequences.
+  after_loading:
+    scheme: Puzzle                          # named after the container
+    scheme_cursor: 1
+    destination: iPhone 17 Pro              # the booted one
+    destination_cursor: 0
+    focus: schemes
+  screens:
+    - name: startup at 80x24
+      steps: [{resize: [80, 24]}]
+      screen: screens/startup-80x24.txt
+    - name: startup at 100x30
+      steps: [{resize: [100, 30]}]
+      screen: screens/startup-100x30.txt
+    - name: startup at 140x30 shows every destination tab
+      steps: [{resize: [140, 30]}]
+      screen: screens/startup-140x30.txt
+    - name: build running
+      steps: [{resize: [100, 30]}, {key: b}]
+      screen: screens/build-running.txt
+    - name: build failed
+      steps: &build_failed
+        - {resize: [100, 30]}
+        - {key: b}
+        - lines:
+            - "Command line invocation:"
+            - "    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild build -project /src/Puzzle.xcodeproj -scheme Puzzle -destination platform=iOS Simulator,id=A"
+            - ""
+            - "CompileSwift normal arm64 /src/Puzzle/Game.swift"
+            - "/src/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"
+            - "/src/Puzzle/Game.swift:3:1: error: cannot find 'x' in scope"
+            - "/src/Puzzle/Board.swift:9:5: warning: unused variable 'y'"
+            - "** BUILD FAILED **"
+        - {done: "exit status 65"}
+      screen: screens/build-failed.txt
+    - name: build failed, issues only, Detail focused
+      steps: [*build_failed, {key: "0"}, {key: i}]
+      screen: screens/build-failed-issues.txt
+    - name: busy
+      steps: [*build_failed, {key: b}, {key: "2"}, {key: k}, {key: enter}]
+      screen: screens/busy.txt
+    - name: run installing
+      steps: &run_installing
+        - {resize: [100, 30]}
+        - {key: r}
+        - {lines: ["CompileSwift normal arm64 /src/Puzzle/Game.swift", "** BUILD SUCCEEDED **"]}
+        - {done: ok}
+      screen: screens/run-installing.txt
+    - name: run attached
+      steps: &run_attached
+        - *run_installing
+        - {launched: {app: com.example.Puzzle, logs: true}}
+        - {app_lines: ["hello from stdout"]}
+        - {log_lines: ['Filtering the log data using "process == \"Puzzle\""', "2026-09-26 10:00:03.361 Df Puzzle[19921:134cebb] [com.apple.UIKit:Application] os_log line"]}
+      screen: screens/run-attached.txt
+    - name: run attached with timestamps
+      steps: [*run_attached, {key: s}]
+      screen: screens/run-attached-timestamps.txt
+    - name: run attached, cursor on the run row
+      steps: [*run_attached, {key: "4"}, {key: j}]
+      screen: screens/run-attached-build-row.txt
+    - name: run exited
+      steps: [*run_attached, log_done, app_done]
+      screen: screens/run-exited.txt
+    - name: typing a filter
+      steps: [{resize: [100, 30]}, {key: "2"}, {key: "/"}, {key: k}, {key: i}, {key: t}]
+      screen: screens/filter-typing.txt
+    - name: help
+      steps: [{resize: [100, 30]}, {key: "?"}]
+      screen: screens/help.txt
+    - name: expanded Destinations
+      steps: [{resize: [100, 30]}, {key: "3"}, {key: "+"}]
+      screen: screens/expanded.txt
+    - name: Destinations on the iOS tab
+      steps: [{resize: [100, 30]}, {key: "3"}, {key: "]"}]
+      screen: screens/destinations-ios.txt
+    - name: Schemes on the Packages tab
+      steps: [{resize: [100, 30]}, {key: "2"}, {key: "]"}]
+      screen: screens/schemes-packages.txt
+  keys:                                       # state after the keys, from the fixture at 80x24
+    - {keys: ["4"], focus: schemes}                               # Runs is empty, not focusable
+    - {keys: ["3", tab], focus: status}                           # tab skips empty Runs and Detail
+    - {keys: ["3", tab, shift+tab], focus: destinations}
+    - {keys: [b, "4"], focus: runs}
+    - {keys: [b, "0"], focus: detail}
+    - {keys: [b, "4", tab], focus: detail}                        # wraps
+    - {keys: ["2", k, enter], scheme: PuzzleKit}
+    - {keys: ["3", j], destination: iPhone 17 Pro}                # moving does not select
+    - {keys: ["3", j, space], destination: iPhone Air}
+    - {keys: [b, b], jobs: 1, status: "Busy — press x to stop"}
+    - {keys: [b, "2", k, enter], scheme: Puzzle}                  # refused while busy
+    - {keys: [b, x], job_outcome_after_done: stopped}
+    - {keys: [r, x], job_outcome_after_done: stopped, state_after_done: idle}   # a stopped run does not install
+    - {keys: ["2", "/", k, i, t], typing: true, schemes_filter: kit, shown_schemes: [PuzzleKit]}
+    - {keys: ["2", "/", k, i, t, backspace, backspace, backspace, n, e, enter, "]"], typing: false, schemes_filter: ne, shown_schemes: [Net]}
+    - {keys: ["2", "/", n, e, enter, "3", "/", a, i, r, enter, "2"], schemes_filter: ne, destinations_filter: air, shown_destinations: [iPhone Air]}
+    - {keys: ["2", "/", n, e, enter, "3", "/", a, i, r, enter, "2", esc], schemes_filter: "", destinations_filter: air}
+    - {keys: ["2", "]"], schemes_tab: Packages, shown_schemes: [Net]}
+    - {keys: ["2", "]", space], scheme: Net}
+    - {keys: ["2", "]", "["], schemes_tab: Schemes}
+    - {keys: ["3", "]"], destinations_tab: iOS, shown_destinations: [iPhone 17 Pro, iPhone Air]}
+    - {keys: ["3", "]", "]"], destinations_tab: tvOS, shown_destinations: [Apple TV 4K]}
+    - {keys: ["3", "]", "]", space], destination: Apple TV 4K}
+    - {keys: ["3", "]", "]", "[", "["], destinations_tab: Destinations}
+    - {keys: ["3", "+"], expanded: true}
+    - {keys: ["3", "+", "0", "_"], expanded: false}
+    - {keys: ["?"], help: true}
+    - {keys: ["?", b], help: false, jobs: 0}                      # the closing key does nothing else
+    - {keys: [e], status: "No run to open"}
+    - {keys: [D], status: "No runs to delete"}
+    - {keys: [b, D], jobs: 1, status: "Only the running job is left; x stops it"}
+  rename:                                     # 12.15; state after the keys; `rename` is the simctl call they started (none: no call), `renamed` then ends it, ok or with that error
+    - {keys: ["3", R], rename_open: true, rename_text: iPhone 17 Pro, screen_contains: "iPhone 17 Pro▏"}
+    - {keys: ["2", R], rename_open: false}                        # only in Destinations
+    - {keys: ["3", R, b, q, "2"], rename_open: true, rename_text: iPhone 17 Probq2, jobs: 0, focus: destinations}   # the popup takes keys as text
+    - {keys: ["3", R, esc], rename_open: false, rename: none}
+    - {keys: ["3", R, space, enter], rename_open: false, rename: none}   # unchanged once trimmed
+    - {keys: ["3", R, backspace, backspace, backspace, W, o, r, k, enter], rename: [xcrun, simctl, rename, A, iPhone 17 Work], renamed: ok, destination: iPhone 17 Work, shown_destinations: [iPhone 17 Work, iPhone Air, Apple TV 4K], status: "Renamed iPhone 17 Pro to iPhone 17 Work"}
+    - {keys: ["3", j, R, "2", enter], rename: [xcrun, simctl, rename, B, iPhone Air2], renamed: "exit status 1", shown_destinations: [iPhone 17 Pro, iPhone Air, Apple TV 4K], status: "Couldn't rename the simulator: exit status 1"}
+  job_results:                                # keys, then the process ends with `done`; the error text is the reference's wording, only its presence matters
+    - {keys: [b], done: ok, state: idle, kind: build, outcome: succeeded}
+    - {keys: [b], done: "exit status 65", state: idle, kind: build, outcome: failed}
+    - {keys: [c], done: ok, state: idle, kind: clean, outcome: succeeded}
+    - {keys: [p], done: ok, state: idle, kind: resolve, outcome: succeeded}
+    - {keys: [t], done: "exit status 65", state: idle, kind: test, outcome: failed}
+    - {keys: [r], done: ok, state: installing, kind: run, outcome: running, build_outcome: succeeded}
+    - {keys: [r], done: "exit status 65", state: idle, kind: run, outcome: failed}
+    - {keys: [b, x], done: "signal: terminated", state: idle, kind: build, outcome: stopped}
+    - {keys: [r, x], done: ok, state: idle, kind: run, outcome: stopped}
+  detail_filter:                              # 12.8, filters on a phase
+    steps: [{key: b}, {lines: [one apple, two pears, three apples]}, {key: "0"}, {key: "/"}, {key: a}, {key: p}, {key: p}, {key: enter}]
+    shown: [one apple, three apples]
+    then_lines: [four apples, five plums]
+    shown_after: [one apple, three apples, four apples]
+    after_esc_shown_count: 5
+  history_in_memory:
+    steps: [{key: b}, {lines: [first build]}, {done: ok}, {key: t}, {lines: [the test]}]
+    jobs: [test, build]                       # newest first
+    runs_cursor: 0
+    detail_shows: [the test]
+    then_keys: ["4", j]
+    detail_shows_after: [first build]
+    cap: 50
+  logview:                                    # 12.7, height 3, width 80 unless given; each case starts from an empty view and applies its steps in order
+    - {steps: [{append: ["1", "2", "3", "4", "5"]}], visible: ["3", "4", "5"], follow: true}
+    - {steps: [{append: ["1", "2", "3", "4", "5"]}, {scroll: -1}, {append: ["6"]}], visible: ["2", "3", "4"], follow: false}
+    - {steps: [{append: ["1", "2", "3", "4", "5"]}, {scroll: -1}, {append: ["6"]}, {scroll_to: 100}, {append: ["7"]}], visible: ["5", "6", "7"], follow: true}
+    - {width: 4, steps: [{append: ["1", "abcdefgh", "3"]}], visible: ["abcdefgh", "3"], follow: true}              # abcdefgh wraps to 2 rows
+    - {width: 4, steps: [{append: ["1", "abcdefgh", "3"]}, {scroll: -1}], visible: ["1", "abcdefgh"], follow: false}
+  half_page: {steps: [{key: b}, {lines: "<100 numbered lines>"}, {key: "4"}, {key: ctrl+u}], offset_delta: "-(detailHeight / 2)", then: {key: ctrl+d}, follow: true}
+
+persistence:                                  # SPEC 13
+  prefs:
+    after_keys: ["2", k, enter, "3", j, space]
+    file: |-
+      {
+        "/src/Puzzle.xcodeproj": {
+          "scheme": "PuzzleKit",
+          "simulator": "B"
+        }
+      }
+    restart_restores: {scheme: PuzzleKit, destination: iPhone Air}
+    argument_overrides: {arg: Nope, scheme: Puzzle, status: 'No scheme "Nope"; using Puzzle'}
+  history:
+    folder: "runs/Puzzle-<8 hex digits of sha1('/src/Puzzle.xcodeproj')>/<2026-09-26T10-00-00.000000000>-build/"
+    files: [meta.json, build.log]                 # compared as sets: a folder listing has no order
+    run_files: [meta.json, build.log, console.log]
+    meta_keys: [Kind, Status, Outcome, BuildOutcome, App, Started, Attached, Elapsed, BuildElapsed, Phases]
+    phase_keys: [Name, Errors, Warnings]
+    log_file: "lines joined by \\n plus a trailing \\n"
+    keep: 50
+    reload:
+      steps:
+        - {key: b}
+        - {lines: [CompileSwift, "/src/Puzzle/A.swift:1:1: warning: unused", "** BUILD SUCCEEDED **"]}
+        - {done: ok}
+        - {key: r}
+        - {lines: [build two]}
+        - {done: ok}
+        - {launched: {app: com.example.Puzzle, logs: false}}
+        - {app_lines: [hello from the app]}
+        - app_done
+      after_restart:
+        jobs: [run, build]
+        status_row: "last time: ✓ run exited 2s · 0 errors · 0 warnings"
+        build_warnings: 1
+        build_log_loaded_lazily: true
+        console_log_line_suffix: " hello from the app"
+    quit_saves_running_job_as: stopped
+  history_delete:                             # 12.14
+    steps: [{key: b}, {done: ok}, {key: c}, {done: ok}, {key: "4"}, {key: D}]
+    screen_contains: "Delete 2 runs from the history?"
+    then_keys: [b, n]                         # the popup takes b; n closes it
+    jobs_after: 2
+    state_after: idle
+    then_keys_2: [D, y]
+    status_final: "Deleted 2 runs"
+    jobs_final: 0
+    focus_final: status
+    folder_exists: false

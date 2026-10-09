@@ -2,50 +2,37 @@ package xcode
 
 import (
 	"slices"
-	"strings"
-	"sync"
 	"testing"
 )
 
-func TestScanPipelines(t *testing.T) {
+func TestXcodebuildArgs(t *testing.T) {
+	scheme := Scheme{Name: "Puzzle"}
+	simulator := Simulator{UDID: "ABC-123"}
+
 	tests := []struct {
-		name        string
-		inputString string
-		prefix      string
-		want        []string
+		name    string
+		project Project
+		want    []string
 	}{
-		{
-			"no prefix",
-			"line one\nline two\n",
-			"",
-			[]string{"line one", "line two"},
-		},
-		{
-			"foo prefix",
-			"line one\nline two\n",
-			"foo: ",
-			[]string{"foo: line one", "foo: line two"},
-		},
+		{"project", Project{Name: "Puzzle.xcodeproj"}, []string{
+			"-project", "Puzzle.xcodeproj", "-scheme", "Puzzle", "-destination", "platform=iOS Simulator,id=ABC-123",
+		}},
+		{"workspace", Project{Name: "Puzzle.xcworkspace"}, []string{
+			"-workspace", "Puzzle.xcworkspace", "-scheme", "Puzzle", "-destination", "platform=iOS Simulator,id=ABC-123",
+		}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := strings.NewReader(tt.inputString)
-			ch := make(chan string, 10)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			scanPipe(r, ch, tt.prefix, &wg)
-			wg.Wait()
-			close(ch)
-
-			var got []string
-			for line := range ch {
-				got = append(got, line)
-			}
-
-			if !slices.Equal(got, tt.want) {
+			if got := xcodebuildArgs(tt.project, scheme, simulator); !slices.Equal(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
 	}
+	t.Run("mac", func(t *testing.T) {
+		want := []string{"-project", "X.xcodeproj", "-scheme", "Puzzle", "-destination", "platform=macOS"}
+		if got := xcodebuildArgs(Project{Name: "X.xcodeproj"}, scheme, Mac); !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
 }

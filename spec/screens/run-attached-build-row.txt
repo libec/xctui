@@ -1,0 +1,30 @@
+┌[1]─Status─────────────────────┐┌[0]─Detail: ✓ run build succeeded 2s · 0 errors · 0 warnings─────┐
+│● run attached                 ││CompileSwift normal arm64 Puzzle/Game.swift                      │
+│Puzzle.xcodeproj               ││** BUILD SUCCEEDED **                                            │
+└───────────────────────────────┘│▸ Installing and launching on iPhone 17 Pro                      │
+┌[2]─Schemes · Packages─────────┐│▸ Launched com.example.Puzzle. Its output is in the console row a│
+│  PuzzleKit                    ││                                                                 │
+│* Puzzle                       ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘│                                                                 │
+┌[3]─Destinations───────────────┐│                                                                 │
+│* iPhone 17 Pro 26.5 ●         ││                                                                 │
+│  iPhone Air 26.5              ││                                                                 │
+│  Apple TV 4K tvOS 26.2        ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘│                                                                 │
+┌[4]─Runs───────────────────────┐│                                                                 │
+│  ● console  Sep 26 10:00  …   ││                                                                 │
+│* ✓ run      Sep 26 10:00  2s  ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+│                               ││                                                                 │
+└───────────────────────────────┘└─────────────────────────────────────────────────────────────────┘
+b build  r run  t test  c clean  p resolve packages  x stop  0-4/tab focus  e editor  ? help  q quit

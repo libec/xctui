@@ -1,0 +1,30 @@
+┌[1]─Status─────────────────────┐┌[0]─Detail───────────────────────────────────────────────────────┐
+│no runs yet · b b┌Keys──────────────────────────────────────────────────────────┐ean              │
+│Puzzle.xcodeproj │b                build                                        │                 │
+└─────────────────│r                run                                          │                 │
+┌[2]─Schemes · Pac│t                test                                         │                 │
+│  PuzzleKit      │c                clean                                        │                 │
+│* Puzzle         │p                resolve packages                             │                 │
+│                 │x                stop                                         │                 │
+│                 │0-4              focus a pane                                 │                 │
+│                 │tab / shift+tab  next / previous pane                         │                 │
+│                 │[ / ]            tabs of Scheme (schemes, packages) or Destina│                 │
+└─────────────────│j / k            move in the pane                             │                 │
+┌[3]─Destinations─│enter / space    select the scheme or destination             │                 │
+│* iPhone 17 Pro 2│R                rename the simulator under the cursor        │                 │
+│  iPhone Air 26.5│/                filter the pane (lists, or the shown log); en│                 │
+│  Apple TV 4K tvO│g / G            top / bottom                                 │                 │
+│                 │ctrl+u / ctrl+d  half a page of the log                       │                 │
+│                 │pgup / pgdn      a page                                       │                 │
+│                 │+ / _            expand the left pane / restore               │                 │
+└─────────────────│i                issues only                                  │                 │
+┌[4]─Runs─────────│s                show / hide console timestamps               │                 │
+│                 │e                open the shown log in $EDITOR                │                 │
+│                 │D                delete the run history                       │                 │
+│                 │? / F1           this help                                    │                 │
+│                 │q                quit                                         │                 │
+│                 │                                                              │                 │
+│                 │any key closes                                                │                 │
+│                 └──────────────────────────────────────────────────────────────┘                 │
+└───────────────────────────────┘└─────────────────────────────────────────────────────────────────┘
+b build  r run  t test  c clean  p resolve packages  x stop  0-4/tab focus  e editor  ? help  q quit

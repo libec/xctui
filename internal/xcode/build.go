@@ -2,80 +2,40 @@
 package xcode
 
 import (
-	"bufio"
-	"fmt"
-	"io"
+	"context"
 	"os/exec"
-	"sync"
+	"syscall"
 )
 
-type BuildStatus string
+// Action is the xcodebuild action to run.
+type Action string
 
 const (
-	StatusPending   BuildStatus = "Pending"
-	StatusRunning   BuildStatus = "Running"
-	StatusSucceeded BuildStatus = "Succeeded"
-	StatusFailed    BuildStatus = "Failed"
+	ActionBuild Action = "build"
+	ActionClean Action = "clean"
+	ActionTest  Action = "test"
 )
 
-func Build(xcodeproj Project, scheme Scheme, simulator Simulator) (<-chan string, error) {
-	buildChannel := make(chan string)
-	command := exec.Command(
-		"xcodebuild",
-		"build",
-		"-project",
-		xcodeproj.Name,
-		"-scheme",
-		scheme.Name,
-		"-destination",
-		fmt.Sprintf("platform=iOS Simulator,id=%s", simulator.UDID),
-	)
-
-	// output reader
-	outputReader, err := command.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	// error reader
-	errReader, err := command.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := command.Start(); err != nil {
-		return nil, err
-	}
-
-	go func() {
-
-		var wg sync.WaitGroup
-
-		// output goroutine
-		wg.Add(1)
-		go scanPipe(outputReader, buildChannel, "", &wg)
-
-		// error goroutine
-		wg.Add(1)
-		go scanPipe(errReader, buildChannel, "❌ ", &wg)
-
-		// wait for output and error to finish
-		wg.Wait()
-		if err := command.Wait(); err != nil {
-			buildChannel <- fmt.Sprintf("command wait error: %v", err)
-		}
-		close(buildChannel)
-	}()
-
-	return buildChannel, nil
+// Build runs `xcodebuild <action>` for the scheme on the simulator and streams its output.
+// Cancel ctx to stop it: SIGTERM makes xcodebuild print "** BUILD INTERRUPTED **" and
+// exit, whereas SIGINT makes it dump a backtrace full of "error:" lines.
+func Build(ctx context.Context, action Action, project Project, scheme Scheme, simulator Simulator) (*Stream, error) {
+	args := append([]string{string(action)}, xcodebuildArgs(project, scheme, simulator)...)
+	return start(exec.CommandContext(ctx, "xcodebuild", args...), syscall.SIGTERM)
 }
 
-func scanPipe(r io.Reader, ch chan<- string, prefix string, wg *sync.WaitGroup) {
-	defer wg.Done()
-	scanner := bufio.NewScanner(r)
+// ResolvePackages runs `xcodebuild -resolvePackageDependencies` for the container and
+// streams its output. Cancel ctx to stop it.
+func ResolvePackages(ctx context.Context, project Project) (*Stream, error) {
+	args := append([]string{"-resolvePackageDependencies"}, project.args()...)
+	return start(exec.CommandContext(ctx, "xcodebuild", args...), syscall.SIGTERM)
+}
 
-	for scanner.Scan() {
-		ch <- fmt.Sprintf("%s%s", prefix, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		ch <- fmt.Sprintf("scanner error: %v", err)
-	}
+// xcodebuildArgs selects the container, scheme and simulator. Every xcodebuild call that
+// resolves build settings needs all three, or it falls back to device paths and defaults.
+func xcodebuildArgs(project Project, scheme Scheme, simulator Simulator) []string {
+	return append(project.args(),
+		"-scheme", scheme.Name,
+		"-destination", simulator.Destination(),
+	)
 }
