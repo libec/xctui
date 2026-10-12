@@ -6,10 +6,11 @@ terminal screens. The prompt below turns them into an implementation in the lang
 choice. The reference implementation is Go with Bubble Tea; a rebuild is judged only by the
 tests and by sitting next to the reference in a terminal.
 
-Two rebuilds have been run from this folder. A strong model finished in 35 minutes with every
-test green. A weaker model wrote its own tests instead of the spec's, stubbed the streaming
-commands and skipped the TUI. The build plan and the definition of done below exist so that
-the second outcome does not repeat: follow them in order and do not stop early.
+Rebuilds from this folder have gone both ways. Strong models finished with every test green and
+matched the Go build under the conformance checker: Rust in 35 minutes, then Swift, Ruby and a
+second Rust. A weaker model, on its first try, wrote its own tests instead of the spec's, stubbed
+the streaming commands and skipped the TUI. The build plan and the definition of done below exist
+so that the second outcome does not repeat: follow them in order and do not stop early.
 
 ## The prompt
 
