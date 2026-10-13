@@ -3,7 +3,7 @@
 # SPEC.md has the rules; this file has the cases; INSTALL.md says how to turn them into tests.
 # Strings are exact. Lists are ordered. `fixtures/<name>` is a captured tool output in the
 # fixtures folder; `screens/<name>` is an exact terminal screen (ANSI stripped) in screens/.
-# 215 cases in 12 groups; INSTALL.md lists the count per group and subgroup. A harness that runs
+# 226 cases in 12 groups; INSTALL.md lists the count per group and subgroup. A harness that runs
 # fewer has skipped some. Temporary folders must be real paths (on macOS /var/folders is a
 # symlink to /private/var/folders); `<tmp>` stands for that real path.
 # A `tree` lists paths relative to a temporary folder: a trailing `/` is a folder, a mapping
@@ -79,6 +79,10 @@ destinations:                                 # SPEC 5
     - {runtime: "watchOS 26.2", udid: C, destination: "platform=watchOS Simulator,id=C", platform_name: watchsimulator}
     - {runtime: "xrOS 26.0", udid: D, destination: "platform=visionOS Simulator,id=D", platform_name: xrsimulator}
     - {mac: true, destination: "platform=macOS", platform_name: macosx}
+    - {runtime: "iOS 26.7.1", udid: E, device: true, destination: "platform=iOS,id=E", platform_name: iphoneos}
+    - {runtime: "tvOS 26.4", udid: F, device: true, destination: "platform=tvOS,id=F", platform_name: appletvos}
+    - {runtime: "watchOS 26.1", udid: G, device: true, destination: "platform=watchOS,id=G", platform_name: watchos}
+    - {runtime: "visionOS 26.0", udid: H, device: true, destination: "platform=visionOS,id=H", platform_name: xros}
   sort:                                       # 5.4, names in order after sorting
     - name: newest runtime first, simctl order kept within a runtime
       input:
@@ -111,13 +115,19 @@ destinations:                                 # SPEC 5
     - name: anything when no iPhone
       input: [{name: iPad Air, runtime: "iOS 26.5"}]
       want: iPad Air
+    - name: a device is never picked, even one named iPhone
+      input: [{name: iPhone, runtime: "iOS 26.7.1", device: true}, {name: iPad Air, runtime: "iOS 26.5"}, {name: iPhone 17 Pro, runtime: "iOS 26.5"}]
+      want: iPhone 17 Pro
     - name: none
       input: []
       want: null
-  parse:                                      # 5.1 + 5.4: My Mac, then booted, then iOS before tvOS before watchOS
+  parse:                                      # 5.1 + 5.4: My Mac, then devices (paired, in reach), then booted, then iOS before tvOS before watchOS
     fixture: fixtures/simctl-list.json
+    devices: fixtures/devicectl-list.json     # what `devicectl list devices` prints; the unavailable Apple TV and the unpaired iPhone are dropped
     want:
       - {name: My Mac, runtime: macOS, state: "", udid: mac}
+      - {name: Test iPad, runtime: "iOS 26.3.1", state: "", udid: 00008120-000CCCCCCCCC0032, device: true}
+      - {name: Test iPhone, runtime: "iOS 26.7.1", state: "", udid: 00008140-000DDDDDDDDD801C, device: true}
       - {name: Apple TV 4K, runtime: "tvOS 26.2", state: Booted, udid: D640FDA5-7FDA-47F1-928F-E630815BB484}
       - {name: iPhone 17 Pro, runtime: "iOS 26.2", state: Shutdown, udid: 6AFBF4E8-BDB3-408A-9458-21A2A91D7899}
       - {name: iPhone+Watch, runtime: "iOS 26.2", state: Shutdown, udid: 5FE0CE7B-707A-4371-8174-6807E1D0F51B}
@@ -126,12 +136,14 @@ destinations:                                 # SPEC 5
     - {name: iPhone 17 Pro, runtime: "iOS 26.5", state: Booted, all: "iPhone 17 Pro 26.5 ●", one_platform: "iPhone 17 Pro 26.5 ●"}
     - {name: Apple TV 4K, runtime: "tvOS 26.2", state: Shutdown, all: "Apple TV 4K tvOS 26.2", one_platform: "Apple TV 4K 26.2"}
     - {name: My Mac, runtime: macOS, mac: true, all: "My Mac macOS", one_platform: "My Mac macOS"}
+    - {name: Test iPhone, runtime: "iOS 26.7.1", state: "", device: true, all: "Test iPhone 26.7.1", one_platform: "Test iPhone 26.7.1"}   # the colour (12.13) tells it from a simulator
 
 commands:                                     # SPEC 6, 7, 8, 9 — exact argv, environment additions and the cancel signal
   xcodebuild_args:                            # 6.3, scheme Puzzle
     - {container: Puzzle.xcodeproj, udid: ABC-123, runtime: "", want: [-project, Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=ABC-123"]}
     - {container: Puzzle.xcworkspace, udid: ABC-123, runtime: "", want: [-workspace, Puzzle.xcworkspace, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=ABC-123"]}
     - {container: X.xcodeproj, mac: true, want: [-project, X.xcodeproj, -scheme, Puzzle, -destination, platform=macOS]}
+    - {container: Puzzle.xcodeproj, udid: 00008140-X, runtime: "iOS 26.7.1", device: true, want: [-project, Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS,id=00008140-X"]}
   actions:                                    # 7, container /src/Puzzle.xcodeproj, scheme Puzzle, destination udid A (iOS)
     - {job: build, argv: [xcodebuild, build, -project, /src/Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=A"], signal: SIGTERM}
     - {job: test, argv: [xcodebuild, test, -project, /src/Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=A"], signal: SIGTERM}
@@ -139,6 +151,7 @@ commands:                                     # SPEC 6, 7, 8, 9 — exact argv, 
     - {job: resolve, argv: [xcodebuild, -resolvePackageDependencies, -project, /src/Puzzle.xcodeproj], signal: SIGTERM}
   list_schemes: {argv: [xcodebuild, -list, -json, -project, /src/Puzzle.xcodeproj]}
   list_simulators: {argv: [xcrun, simctl, list, devices, available, -j]}
+  list_devices: {argv: [xcrun, devicectl, list, devices, --json-output, "-", -q]}   # 5.1, best effort
   rename: {udid: ABC-123, name: Work phone, argv: [xcrun, simctl, rename, ABC-123, Work phone]}   # 5.7
   build_settings: {argv: [xcodebuild, -showBuildSettings, -json, -project, /src/Puzzle.xcodeproj, -scheme, Puzzle, -destination, "platform=iOS Simulator,id=A"]}
   install:                                    # 9.1, udid ABC-123, app /dd/Puzzle.app; `calls` are the commands run, in order
@@ -161,7 +174,15 @@ commands:                                     # SPEC 6, 7, 8, 9 — exact argv, 
       calls:
         - [xcrun, simctl, boot, ABC-123]
       error: true
+    - name: device, nothing to boot
+      udid: 00008140-X
+      device: true
+      boot_error: null
+      calls:
+        - [xcrun, devicectl, device, install, app, --device, 00008140-X, /dd/Puzzle.app]
+      error: false
   launch: {argv: [xcrun, simctl, launch, --console-pty, --terminate-running-process, ABC-123, com.example.Puzzle], env: [SIMCTL_CHILD_OS_ACTIVITY_DT_MODE=YES], signal: SIGINT}
+  launch_device: {udid: 00008140-X, argv: [xcrun, devicectl, device, process, launch, --console, --terminate-existing, --device, 00008140-X, com.example.Puzzle], env: [DEVICECTL_CHILD_OS_ACTIVITY_DT_MODE=YES], signal: SIGINT}
   launch_mac: {executable: /dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja, argv: [/dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja], env: [OS_ACTIVITY_DT_MODE=YES], signal: SIGTERM}
   log_stream:                                 # 9.3
     - simulator: {udid: ABC-123, app: /dd/Debug-iphonesimulator/Puzzle.app, executable: /dd/Debug-iphonesimulator/Puzzle.app/Puzzle}
@@ -170,6 +191,8 @@ commands:                                     # SPEC 6, 7, 8, 9 — exact argv, 
     - mac: {app: /dd/Debug/ClipNinja.app, executable: /dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja}
       argv: [xcrun, log, stream, --style, compact, --level, debug, --predicate, 'process == "ClipNinja" AND senderImagePath CONTAINS "/ClipNinja.app/" AND messageType == debug AND NOT subsystem BEGINSWITH "com.apple.Previews"']
       signal: SIGTERM
+    - device: {udid: 00008140-X, app: /dd/Debug-iphoneos/Puzzle.app, executable: /dd/Debug-iphoneos/Puzzle.app/Puzzle}
+      argv: null                              # no stream: nothing runs
 
 stream:                                       # SPEC 2, 6.1, 6.2
   scan_lines:
@@ -313,11 +336,13 @@ cli:                                          # SPEC 11
         NetMocks (package)
         Tool (package)
     exit: 0
-  destinations:                               # simctl replaced by fixtures/simctl-list.json; needs no project
+  destinations:                               # simctl replaced by fixtures/simctl-list.json, devicectl by fixtures/devicectl-list.json; needs no project
     tree: []
     args: [destinations]
     stdout: |2
         My Mac macOS  mac
+        Test iPad 26.3.1 (device)  00008120-000CCCCCCCCC0032
+        Test iPhone 26.7.1 (device)  00008140-000DDDDDDDDD801C
         Apple TV 4K tvOS 26.2 ●  D640FDA5-7FDA-47F1-928F-E630815BB484
       * iPhone 17 Pro 26.2  6AFBF4E8-BDB3-408A-9458-21A2A91D7899
         iPhone+Watch 26.2  5FE0CE7B-707A-4371-8174-6807E1D0F51B

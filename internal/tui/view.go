@@ -19,6 +19,7 @@ var (
 	boldStyle    = lipgloss.NewStyle().Bold(true)
 	borderStyle  = dimStyle
 	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Blue).Bold(true)
+	deviceStyle  = lipgloss.NewStyle().Foreground(lipgloss.Cyan)
 )
 
 type lineKind int
@@ -224,7 +225,11 @@ func (m Model) simulatorRows(rows, width int) []string {
 		if s.State == "Booted" {
 			label += " ●"
 		}
-		items = append(items, item{label: label, index: i})
+		var style lipgloss.Style
+		if s.Device {
+			style = deviceStyle
+		}
+		items = append(items, item{label: label, style: style, index: i})
 	}
 	current := slices.IndexFunc(m.simulators, func(s xcode.Simulator) bool { return s.UDID == m.simulator.UDID })
 	return m.list(items, current, at(m.simulatorIndices(), m.simulatorCursor), m.focus == simulatorPane, rows, width)
@@ -302,7 +307,11 @@ func (m Model) detailTitle() string {
 func (m Model) detailRows() []string {
 	p := m.shownPhase()
 	if p == nil {
-		return []string{dimStyle.Render("b build · r run on the simulator · t test · c clean")}
+		target := "simulator"
+		if m.simulator.Device {
+			target = "device"
+		}
+		return []string{dimStyle.Render("b build · r run on the " + target + " · t test · c clean")}
 	}
 	var rows []string
 	for _, line := range p.shown(m.showIssues).visible() {

@@ -50,6 +50,29 @@ func TestInstall(t *testing.T) {
 	}
 }
 
+func TestInstallOnDevice(t *testing.T) {
+	var calls [][]string
+	fakeRun := func(name string, args ...string) error {
+		calls = append(calls, append([]string{name}, args...))
+		return nil
+	}
+	if err := installWith(Simulator{UDID: "00008140-X", Device: true}, "/dd/Puzzle.app", fakeRun); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing to boot and no Simulator.app.
+	want := [][]string{{"xcrun", "devicectl", "device", "install", "app", "--device", "00008140-X", "/dd/Puzzle.app"}}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("got calls %v, want %v", calls, want)
+	}
+}
+
+func TestNoLogStreamOnDevice(t *testing.T) {
+	stream, err := LogStream(context.Background(), Simulator{UDID: "00008140-X", Device: true}, BuildSettings{Executable: "/dd/Puzzle.app/Puzzle"})
+	if stream != nil || err != nil {
+		t.Errorf("got %v, %v; want no stream and no error", stream, err)
+	}
+}
+
 func TestLogPredicate(t *testing.T) {
 	settings := BuildSettings{AppPath: "/dd/Debug-iphonesimulator/Puzzle.app", Executable: "/dd/Debug-iphonesimulator/Puzzle.app/Puzzle"}
 	got := logPredicate(settings)
@@ -92,6 +115,11 @@ func TestLaunchMirrorsTheLog(t *testing.T) {
 	want := []string{"xcrun", "simctl", "launch", "--console-pty", "--terminate-running-process", "ABC-123", "com.example.Puzzle"}
 	if !slices.Equal(cmd.Args, want) || !slices.Contains(cmd.Env, "SIMCTL_CHILD_OS_ACTIVITY_DT_MODE=YES") {
 		t.Errorf("simulator launch: args %v, mirror variable set: %v", cmd.Args, slices.Contains(cmd.Env, "SIMCTL_CHILD_OS_ACTIVITY_DT_MODE=YES"))
+	}
+	device := launchCommand(context.Background(), Simulator{UDID: "00008140-X", Device: true}, "com.example.Puzzle")
+	want = []string{"xcrun", "devicectl", "device", "process", "launch", "--console", "--terminate-existing", "--device", "00008140-X", "com.example.Puzzle"}
+	if !slices.Equal(device.Args, want) || !slices.Contains(device.Env, "DEVICECTL_CHILD_OS_ACTIVITY_DT_MODE=YES") {
+		t.Errorf("device launch: args %v, mirror variable set: %v", device.Args, slices.Contains(device.Env, "DEVICECTL_CHILD_OS_ACTIVITY_DT_MODE=YES"))
 	}
 	mac := macCommand(context.Background(), BuildSettings{Executable: "/dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja"})
 	if !slices.Equal(mac.Args, []string{"/dd/Debug/ClipNinja.app/Contents/MacOS/ClipNinja"}) || !slices.Contains(mac.Env, "OS_ACTIVITY_DT_MODE=YES") {

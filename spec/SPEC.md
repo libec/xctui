@@ -23,7 +23,8 @@ screens the cases compare against).
 - **Scheme** — a name xcodebuild accepts for `-scheme`. Comes from `.xcscheme` files, from
   `xcodebuild -list`, or from a local Swift package's products.
 - **Package scheme** — a scheme that is a product of a local Swift package (`Package: true`).
-- **Destination** — where a build runs: a simulator (name, runtime, state, UDID) or **My Mac**.
+- **Destination** — where a build runs: a simulator (name, runtime, state, UDID), a **device**
+  (an iPhone, iPad, Apple TV, … paired with this Mac) or **My Mac**.
 - **Job** — one thing the user started: `build`, `test`, `clean`, `resolve` or `run`. Also called a
   **run** in the TUI, where it is a row in the Runs pane.
 - **Phase** — one log of a job. Every job has a first phase named after its kind (`build` for a
@@ -130,6 +131,22 @@ JSON: `{"devices": {"<runtime id>": [{"name": …, "state": …, "udid": …, �
 device under every runtime becomes `Simulator{Name, Runtime, State, UDID}` with `Runtime` from
 5.2. Other device fields are ignored.
 
+**Devices** (best effort: when the command fails or its output does not parse, there are none
+and the simulators are listed as usual):
+
+    xcrun devicectl list devices --json-output - -q
+
+JSON (stdout): `{"result": {"devices": [{"connectionProperties": {"pairingState": …,
+"tunnelState": …}, "deviceProperties": {"name": …, "osVersionNumber": …},
+"hardwareProperties": {"platform": …, "udid": …}, …}, …]}, …}`. A device is kept when
+`pairingState` is `paired` and `tunnelState` is not `unavailable` (an idle device in reach flips
+between `connected` and `disconnected`; both stay). It becomes
+`Simulator{Name: name, Runtime: "<platform> <osVersionNumber>", State: "", UDID: udid,
+Device: true}` — e.g. `iOS 26.7.1`. The `udid` is the id xcodebuild knows the device by
+(devicectl's own `identifier` differs); devicectl's `--device` accepts it too. Two devices may
+share a name; only the UDID tells them apart. Other fields are ignored; the fixture is
+`fixtures/devicectl-list.json`.
+
 ### 5.2 Runtime name
 
 `com.apple.CoreSimulator.SimRuntime.iOS-18-2` → `iOS 18.2`: strip the prefix
@@ -153,22 +170,24 @@ Sort simulators **stably** by:
    before it in the list);
 4. otherwise the order simctl gave, which lists the newest models first.
 
-Then prepend **My Mac**: `Simulator{Name: "My Mac", Runtime: "macOS", State: "", UDID: "mac"}`.
-My Mac is always the first destination.
+Then prepend the devices of 5.1 in devicectl's order, and before them **My Mac**:
+`Simulator{Name: "My Mac", Runtime: "macOS", State: "", UDID: "mac"}`. My Mac is always the
+first destination: My Mac, devices, simulators.
 
 ### 5.5 Default destination
 
-`DefaultSimulator(list)`: the first booted simulator whose platform is `iOS`; else the first whose
-name starts with `iPhone`; else the first item (My Mac); empty list → none. It expects the
-order of 5.4.
+`DefaultSimulator(list)`: the first booted simulator whose platform is `iOS`; else the first
+simulator (not a device) whose name starts with `iPhone`; else the first item (My Mac); empty
+list → none. A device is never the default; only the user picks one. It expects the order of
+5.4.
 
 ### 5.6 Derived values
 
 | Value | Rule |
 |---|---|
 | `IsMac()` | `UDID == "mac"` |
-| `Destination()` | Mac: `platform=macOS`; else `platform=<Platform> Simulator,id=<UDID>` |
-| `PlatformName()` | macOS → `macosx`, tvOS → `appletvsimulator`, watchOS → `watchsimulator`, visionOS → `xrsimulator`, anything else → `iphonesimulator` |
+| `Destination()` | Mac: `platform=macOS`; device: `platform=<Platform>,id=<UDID>`; else `platform=<Platform> Simulator,id=<UDID>` |
+| `PlatformName()` | macOS → `macosx`, tvOS → `appletvsimulator`, watchOS → `watchsimulator`, visionOS → `xrsimulator`, anything else → `iphonesimulator`; for a device `os` replaces `simulator`: `iphoneos`, `appletvos`, `watchos`, `xros` |
 | label (all platforms) | iOS: `<Name> <version>` where version is the runtime without the `iOS ` prefix; other platforms: `<Name> <Runtime>`; My Mac: `My Mac macOS`; then ` ●` when booted |
 | label (one platform) | `<Name> ` + the runtime without its `<Platform> ` prefix (the platform is the tab), then ` ●` when booted; My Mac's runtime has no version, so it stays `My Mac macOS`; a visionOS runtime is named `xrOS 2.0`, which does not carry the `visionOS ` prefix, so it stays too |
 
@@ -283,6 +302,21 @@ from every framework in it, to stderr in full, the way Xcode's console gets them
 cuts a long argument at about a kilobyte and marks the cut with `<…>`. Debug messages are not
 mirrored (9.3). The mirrored lines carry their own time (9.4).
 
+**A device** skips steps 1 and 2 (it is on, and Simulator.app has nothing to show) and replaces
+3 and 4, with the same error shape:
+
+3. `xcrun devicectl device install app --device <UDID> <AppPath>`
+4. `xcrun devicectl device process launch --console --terminate-existing --device <UDID> <BundleID>`
+   — streamed (6.1, SIGINT, which devicectl forwards to the app), with
+   `DEVICECTL_CHILD_OS_ACTIVITY_DT_MODE=YES` added to its environment, which devicectl hands to
+   the app as `OS_ACTIVITY_DT_MODE=YES`. Its lines are devicectl's own and the app's stdout and
+   stderr, mirror included. It ends when the app exits. devicectl exits 1 both when the launch
+   is refused (a locked device: `ERROR: The application failed to launch …`) and when the app
+   ends by a signal, so the exit status tells nothing; either way the run ends `exited` (12.7)
+   and the console holds devicectl's lines.
+
+The build signs for the device with the project's own settings; xctui adds no signing flags.
+
 ### 9.2 My Mac
 
 Run `<Executable>` directly, streamed (SIGTERM), with `OS_ACTIVITY_DT_MODE=YES` added to its
@@ -290,7 +324,8 @@ environment (9.1). Its lines are the app's stdout and stderr.
 
 ### 9.3 Unified log (best effort)
 
-Started right after the launch, in both cases; if it cannot start the run goes on without it.
+Started right after the launch on a simulator or the Mac; if it cannot start the run goes on
+without it. A device has no such stream (devicectl offers none): its debug messages are lost.
 The mirror of 9.1 leaves out debug messages; this stream adds the app's own.
 
 - simulator: `xcrun simctl spawn <UDID> log stream --style compact --level debug --predicate <P>`
@@ -440,7 +475,8 @@ Subcommands:
 - `schemes` — one line per scheme in the order of 4.4: `* ` before the default scheme (4.5),
   two spaces before the others, then the name, then ` (package)` for a package scheme.
 - `destinations` — one line per destination in the order of 5.4: `* ` before the default (5.5),
-  two spaces otherwise, then the all-platforms label of 5.6, two spaces, the UDID.
+  two spaces otherwise, then the all-platforms label of 5.6, then ` (device)` for a device (the
+  TUI's colour, 12.13, has no plain-text form), two spaces, the UDID.
 - `settings` — three lines: `app: <AppPath>`, `bundle: <BundleID>`, `executable: <Executable>`.
 - `build`, `test`, `clean`, `resolve` — stdout receives the job's log lines as they arrive
   (section 10.2 applied, and the failure line of 10.7 at the end of a failed job). When the
@@ -453,7 +489,7 @@ Subcommands:
   `▸ Installing and launching on <destination Name>`, then section 9 runs. Then stdout gets
   `▸ Launched <BundleID>` (the TUI's version of this line, 12.7, adds a hint about its console
   row) and every console line (9.4, with its time prefix), until the app exits (exit 0, stderr `✓ run exited …`) or Ctrl-C (SIGINT
-  to simctl launch, exit 130, stderr `■ run stopped …`). A failing install or launch prints its
+  to simctl or devicectl launch, exit 130, stderr `■ run stopped …`). A failing install or launch prints its
   error lines (10.7) to stdout, `✗ run failed …` to stderr, exit 1.
 
 ## 12. TUI
@@ -551,7 +587,8 @@ rows past `detailHeight` are dropped. For the console phase the time prefix
 shown dim at the start of the first row while they are on (`s`). With no
 lines the single row is a hint (dim): `no line matches` when the phase has a filter,
 `No errors or warnings. i shows the full log.` in issues mode, else `waiting for output`. With
-no jobs at all: `b build · r run on the simulator · t test · c clean`.
+no jobs at all: `b build · r run on the simulator · t test · c clean`, with `device` for
+`simulator` when the current destination is a device.
 
 ### 12.5 Lists
 
@@ -599,7 +636,7 @@ Otherwise:
 | `g`, `home` / `G`, `end` | first / last item, or top / bottom of the log |
 | `ctrl+d` / `ctrl+u` | scroll the shown log by half of `detailHeight` down / up, whichever pane has focus |
 | `enter`, `space` | in Schemes or Destinations: make the cursor item current and save prefs (13.1); refused with `Busy — press x to stop` while a job runs; elsewhere nothing |
-| `R` | in Destinations, with the cursor on a simulator: rename it (12.15); elsewhere and on My Mac nothing |
+| `R` | in Destinations, with the cursor on a simulator: rename it (12.15); elsewhere, on My Mac and on a device nothing |
 | `/` | start typing the focused pane's filter (Schemes, Destinations, or Detail when it shows a phase); nothing in Status or Runs |
 | `esc` | clear the focused pane's filter |
 | `[`, `]` | previous / next tab of the focused Schemes or Destinations pane (wrapping); nothing elsewhere |
@@ -774,6 +811,7 @@ waited for, so no xcodebuild, simctl or log process survives xctui.
 | bold | bold |
 | focused | blue foreground, bold |
 | border | dim; focused pane: focused |
+| device | cyan foreground: a device's row in Destinations, the only mark that tells it from a simulator |
 | selection (cursor row) | bold on a background one shade off the terminal's: on a light background the background darkened by 9 %, on a dark one lightened by 8 %. Until the terminal has answered the background query: reverse video, bold. It fills the row across the pane. |
 
 Job style by outcome: succeeded and exited → success; failed → error; stopped → warning;
@@ -799,8 +837,8 @@ into a new folder as usual.
 
 ### 12.15 Renaming a simulator
 
-`R` with Destinations focused and its cursor on a simulator opens a popup; on My Mac, in an empty
-list, or with another pane focused it does nothing. The popup is drawn and centred like the help
+`R` with Destinations focused and its cursor on a simulator opens a popup; on My Mac, on a
+device, in an empty list, or with another pane focused it does nothing. The popup is drawn and centred like the help
 (12.10): a box 64 cells wide titled `Rename simulator` in the focused style, with the rows
 `<text>▏`, an empty row, and `enter rename  esc cancel` (keys bold, labels dim). The text starts
 as the simulator's name; the popup's keys are in 12.6, so `b`, `q` or a digit are text. `enter`

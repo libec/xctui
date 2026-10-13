@@ -13,6 +13,7 @@ import (
 )
 
 // Install boots the simulator, shows it in Simulator.app and installs the app on it.
+// A device needs only the install.
 func Install(ctx context.Context, simulator Simulator, appPath string) error {
 	return installWith(simulator, appPath, func(name string, args ...string) error {
 		out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
@@ -24,6 +25,9 @@ func Install(ctx context.Context, simulator Simulator, appPath string) error {
 }
 
 func installWith(simulator Simulator, appPath string, run func(name string, args ...string) error) error {
+	if simulator.Device {
+		return run("xcrun", "devicectl", "device", "install", "app", "--device", simulator.UDID, appPath)
+	}
 	err := run("xcrun", "simctl", "boot", simulator.UDID)
 	if err != nil && !strings.Contains(err.Error(), "current state: Booted") {
 		return err
@@ -55,8 +59,12 @@ func macCommand(ctx context.Context, settings BuildSettings) *exec.Cmd {
 // LogStream follows the app's own debug messages in the unified log, the one
 // level the stderr mirror (mirrorEnv) leaves out; frameworks' debug chatter stays
 // out. Inside a simulator that is `log stream` under simctl spawn; on the Mac it
-// is the host's own. Cancelling sends SIGTERM.
+// is the host's own. A device has none to reach, so its debug messages are lost.
+// Cancelling sends SIGTERM.
 func LogStream(ctx context.Context, simulator Simulator, settings BuildSettings) (*Stream, error) {
+	if simulator.Device {
+		return nil, nil
+	}
 	args := []string{"log", "stream", "--style", "compact", "--level", "debug", "--predicate", logPredicate(settings)}
 	if !simulator.IsMac() {
 		args = append([]string{"simctl", "spawn", simulator.UDID}, args...)
@@ -101,14 +109,19 @@ func CleanMirroredLine(line string) (string, bool) {
 }
 
 // Launch starts the app and streams its console until the app exits or ctx is cancelled.
-// simctl hands the app the mirror variable (mirrorEnv) from its own environment.
-// Cancelling sends SIGINT: simctl then terminates the app, which SIGTERM or SIGKILL
-// would leave running.
+// simctl and devicectl hand the app the mirror variable (mirrorEnv) from their own
+// environment. Cancelling sends SIGINT: simctl then terminates the app, which SIGTERM
+// or SIGKILL would leave running; devicectl forwards it to the app.
 func Launch(ctx context.Context, simulator Simulator, bundleID string) (*Stream, error) {
 	return start(launchCommand(ctx, simulator, bundleID), os.Interrupt)
 }
 
 func launchCommand(ctx context.Context, simulator Simulator, bundleID string) *exec.Cmd {
+	if simulator.Device {
+		cmd := exec.CommandContext(ctx, "xcrun", "devicectl", "device", "process", "launch", "--console", "--terminate-existing", "--device", simulator.UDID, bundleID)
+		cmd.Env = append(os.Environ(), "DEVICECTL_CHILD_"+mirrorEnv)
+		return cmd
+	}
 	cmd := exec.CommandContext(ctx, "xcrun", "simctl", "launch", "--console-pty", "--terminate-running-process", simulator.UDID, bundleID)
 	cmd.Env = append(os.Environ(), "SIMCTL_CHILD_"+mirrorEnv)
 	return cmd

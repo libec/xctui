@@ -46,7 +46,7 @@ def printf_lines(lines) = lines.map { |l| "printf '%s\\n' #{Shellwords.escape(l)
 # what `log stream` prints, half a second after it starts so that the app's first stdout line
 # always lands in the console before the log's (the two arrive from two processes; the
 # reference itself shows either order), before waiting for SIGTERM.
-def fake_tools(bin, simctl_json:, build_lines: [], build_exit: 0, stopped: false, list_json: nil,
+def fake_tools(bin, simctl_json:, devicectl_json: nil, build_lines: [], build_exit: 0, stopped: false, list_json: nil,
                launch_lines: ['hello from stdout'], launch_exit_after: nil,
                log_lines: ['Filtering the log data using "process == \"Puzzle\""',
                            '2026-09-26 10:00:03.361 Df Puzzle[19921:134cebb] [com.apple.UIKit:Application] os_log line'])
@@ -68,6 +68,7 @@ def fake_tools(bin, simctl_json:, build_lines: [], build_exit: 0, stopped: false
   script(File.join(bin, 'xcrun'), <<~SH)
     case "$*" in
       *"simctl list"*) cat #{Shellwords.escape(simctl_json)} ;;
+      *"devicectl list"*) #{devicectl_json ? "cat #{Shellwords.escape(devicectl_json)}" : 'exit 0'} ;;
       *"simctl launch"*) #{printf_lines(launch_lines)}; #{launch_end} ;;
       *"log stream"*) sleep 0.5; #{printf_lines(log_lines)}; trap 'exit 143' TERM; while :; do sleep 0.1; done ;;
       *) exit 0 ;;
@@ -129,7 +130,7 @@ def check_cli
     FileUtils.mkdir_p([home, work])
     make_tree(work, c.key?('tree') ? c['tree'] : cli['tree'])
     lines = (c['tool_output'] || []).map { |l| l.gsub('<tmp>', work) }
-    opts = { simctl_json: File.join(FIX, 'simctl-list.json'), build_lines: lines,
+    opts = { simctl_json: File.join(FIX, 'simctl-list.json'), devicectl_json: File.join(FIX, 'devicectl-list.json'), build_lines: lines,
              build_exit: c['tool_exit'] || 0, stopped: name == 'build_stopped' }
     opts[:launch_lines] = c['launch_output'] if c['launch_output']
     opts[:launch_exit_after] = c['launch_exit_after_s'] if c['launch_exit_after_s']

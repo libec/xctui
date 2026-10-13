@@ -400,9 +400,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("No runs to delete", warningStyle)
 		}
 	case "R":
-		if idx := m.simulatorIndices(); m.focus == simulatorPane && len(idx) > 0 && !m.simulators[idx[m.simulatorCursor]].IsMac() {
-			m.renaming = m.simulators[idx[m.simulatorCursor]]
-			m.renameText = m.renaming.Name
+		if idx := m.simulatorIndices(); m.focus == simulatorPane && len(idx) > 0 {
+			if s := m.simulators[idx[m.simulatorCursor]]; !s.IsMac() && !s.Device { // only simctl renames
+				m.renaming = s
+				m.renameText = s.Name
+			}
 		}
 	case "0", "1", "2", "3", "4":
 		m.setFocus(pane(key[0] - '0'))

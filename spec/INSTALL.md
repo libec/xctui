@@ -66,8 +66,8 @@ model: 0 and 1 together 30 min, 2 30 min, 3 30 min, 4 45 min, 5 60 min, 6 30 min
 | Phase | Build | Gate: these `tests.yaml` groups pass, with this many cases |
 |---|---|---|
 | 0 | Read SPEC.md and tests.yaml. Create the project, `NOTES.md` with a timeline, and the module split below. Write the tests.yaml loader (a YAML library; aliases spliced as the file's header says). | the loader parses the file and prints the cases per group; the numbers must match the table below |
-| 1 | Data layer: container search (SPEC 3), schemes (4), destinations (5), build settings (8), log cleaning (9.3, 9.4), log processing (10). Pure functions, no processes yet. | `container` 5, `container_args` 2, `schemes` 11, `destinations` 25, `build_settings` 7, `log` 9, `processing` 43 — 102 cases |
-| 2 | Process layer: the streamed command (6.1) with one pipe, the 4 MiB line limit, the bounded queue, cancel by signal then SIGKILL, process groups; the one-shot command (6.2). A **runner** abstraction with two implementations: real, and a fake that records argv and returns canned output, so the `commands` group can check argv and signal without executing anything. | `stream` 7 (real shell scripts), `commands` 18 — 25 cases |
+| 1 | Data layer: container search (SPEC 3), schemes (4), destinations (5), build settings (8), log cleaning (9.3, 9.4), log processing (10). Pure functions, no processes yet. | `container` 5, `container_args` 2, `schemes` 11, `destinations` 31, `build_settings` 7, `log` 9, `processing` 43 — 108 cases |
+| 2 | Process layer: the streamed command (6.1) with one pipe, the 4 MiB line limit, the bounded queue, cancel by signal then SIGKILL, process groups; the one-shot command (6.2). A **runner** abstraction with two implementations: real, and a fake that records argv and returns canned output, so the `commands` group can check argv and signal without executing anything. | `stream` 7 (real shell scripts), `commands` 23 — 30 cases |
 | 3 | CLI (SPEC 11): every subcommand, exact output, exit codes, Ctrl-C. | `cli` 12, run against the built binary with fake `xcodebuild`, `xcrun` and `open` on PATH (recipe below) |
 | 4 | Job model (12.7): jobs, phases, issues, the three log views with follow, the state machine, install-and-launch (9), prefs and history (13). No rendering yet; a model that takes the test steps (`resize`, `key`, `lines`, `done`, `launched`, `app_lines`, `log_lines`, `log_done`, `app_done`, `renamed`) directly. | `tui.after_loading` 1, `tui.keys` 31, `tui.rename` 7, `tui.job_results` 9, `tui.detail_filter` 1, `tui.history_in_memory` 1, `tui.logview` 5, `tui.half_page` 1, `persistence` 3 — 59 cases |
 | 5 | Renderer (12.2 to 12.5, 12.8 to 12.10, 12.13): the frame function, lists, Status, Detail, tabs, footer, help overlay, into a grid of cells or a string. Start with `screens/startup-80x24.txt`, then the job screens. | `tui.screens` 17, all byte-exact |
@@ -84,18 +84,18 @@ model: 0 and 1 together 30 min, 2 30 min, 3 30 min, 4 45 min, 5 60 min, 6 30 min
 > tests still pass, the work is committed, and `NOTES.md` has the phase's time and any ambiguity
 > you met. Report the test summary line and the cases run per subgroup. Do not stub anything.
 
-**Case counts.** `tests.yaml` holds 215 cases. Per group, counting every entry of every
+**Case counts.** `tests.yaml` holds 226 cases. Per group, counting every entry of every
 subgroup: `container` 5 · `container_args` 2 · `schemes` 11 (files_on_disk 2, package_products 1,
-list_fallback 2, merge 1, default 3, display 2) · `destinations` 25 (runtime_name 5, platform 3,
-destination_and_platform_name 5, sort 3, default 5, parse 1, labels 3) · `commands` 18
-(xcodebuild_args 3, actions 4, list_schemes 1, list_simulators 1, rename 1, build_settings 1, install 3,
-launch 1, launch_mac 1, log_stream 2) · `stream` 7 (scan_lines 3, exit_code 1, cancel 2,
+list_fallback 2, merge 1, default 3, display 2) · `destinations` 31 (runtime_name 5, platform 3,
+destination_and_platform_name 9, sort 3, default 6, parse 1, labels 4) · `commands` 23
+(xcodebuild_args 4, actions 4, list_schemes 1, list_simulators 1, list_devices 1, rename 1, build_settings 1, install 4,
+launch 1, launch_device 1, launch_mac 1, log_stream 3) · `stream` 7 (scan_lines 3, exit_code 1, cancel 2,
 one_shot_error 1) · `build_settings` 7 · `log` 9 (clean_line 6, mirror_line 3) · `processing` 43 (kind 5, issues 1,
 strip_paths 2, short 4, when 2, count 3, marks 6, summaries 7, build_summaries 3,
 console_summaries 3, runs_rows 7) · `cli` 12 · `tui` 73 (after_loading 1, screens 17, keys 31, rename 7,
 job_results 9, detail_filter 1, history_in_memory 1, logview 5, half_page 1) · `persistence` 3.
 A harness that reports fewer has skipped cases; a gate is not passed until its count is met.
-Extra tests of your own beyond the 215 are welcome when they are labelled as extra in the summary.
+Extra tests of your own beyond the 226 are welcome when they are labelled as extra in the summary.
 
 ## Test harness recipe
 
@@ -129,7 +129,7 @@ Extra tests of your own beyond the 215 are welcome when they are labelled as ext
   `build_stopped` it prints the first line, waits, and on SIGTERM prints the second and exits;
   the test sends SIGINT to the binary 1.5 s after the first line has reached stdout (not after
   spawn: a slow-starting runtime would otherwise read `1s`). `xcrun simctl list …` prints
-  `fixtures/simctl-list.json`; for `run_exited`, `simctl launch` prints `launch_output` and
+  `fixtures/simctl-list.json` and `xcrun devicectl list …` prints `fixtures/devicectl-list.json`; for `run_exited`, `simctl launch` prints `launch_output` and
   exits after `launch_exit_after_s`, `log stream` prints `log_output` and waits for SIGTERM,
   and `no_process_left` means no fake may survive the binary. Compare stdout, stderr and the
   exit code byte for byte, or line by line against `stdout_matches` / `stderr_matches` (one

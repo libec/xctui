@@ -74,7 +74,7 @@ func printProjectInfo() {
 	if err != nil {
 		log.Fatal("there are no simulators to run")
 	}
-	fmt.Printf("simulators found: %s", simulators)
+	fmt.Printf("simulators found: %v", simulators)
 }
 
 func build(scheme, simulator string) {

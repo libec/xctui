@@ -13,6 +13,7 @@ type Simulator struct {
 	Runtime string // human-readable, e.g. "iOS 18.2"
 	State   string
 	UDID    string
+	Device  bool // a physical device paired with this Mac
 }
 
 const stateBooted = "Booted"
@@ -38,25 +39,32 @@ func (s Simulator) Platform() string {
 
 // Destination is the -destination value xcodebuild wants.
 func (s Simulator) Destination() string {
-	if s.IsMac() {
+	switch {
+	case s.IsMac():
 		return "platform=macOS"
+	case s.Device:
+		return "platform=" + s.Platform() + ",id=" + s.UDID
 	}
 	return "platform=" + s.Platform() + " Simulator,id=" + s.UDID
 }
 
 // PlatformName is the PLATFORM_NAME build setting the destination builds for.
 func (s Simulator) PlatformName() string {
+	sdk := "iphone"
 	switch s.Platform() {
 	case "macOS":
 		return "macosx"
 	case "tvOS":
-		return "appletvsimulator"
+		sdk = "appletv"
 	case "watchOS":
-		return "watchsimulator"
+		sdk = "watch"
 	case "visionOS":
-		return "xrsimulator"
+		sdk = "xr"
 	}
-	return "iphonesimulator"
+	if s.Device {
+		return sdk + "os"
+	}
+	return sdk + "simulator"
 }
 
 // platformOrder is how the destinations list groups platforms.
@@ -72,16 +80,39 @@ type rawDevice struct {
 	UDID  string `json:"udid"`
 }
 
-// ParseSimulators returns the run destinations: My Mac, then every available
-// simulator, booted first, then by platform, then newest runtime first.
+// devicectlDevices is the part of `devicectl list devices --json-output -` xctui reads.
+type devicectlDevices struct {
+	Result struct {
+		Devices []struct {
+			ConnectionProperties struct {
+				PairingState string `json:"pairingState"`
+				TunnelState  string `json:"tunnelState"`
+			} `json:"connectionProperties"`
+			DeviceProperties struct {
+				Name            string `json:"name"`
+				OSVersionNumber string `json:"osVersionNumber"`
+			} `json:"deviceProperties"`
+			HardwareProperties struct {
+				Platform string `json:"platform"`
+				UDID     string `json:"udid"`
+			} `json:"hardwareProperties"`
+		} `json:"devices"`
+	} `json:"result"`
+}
+
+// ParseSimulators returns the run destinations: My Mac, the paired devices in
+// reach, then every available simulator, booted first, then by platform, then
+// newest runtime first.
 func ParseSimulators() ([]Simulator, error) {
 	return parseSimulatorsWith(func() ([]byte, error) {
 		return output(exec.Command("xcrun", "simctl", "list", "devices", "available", "-j"))
+	}, func() ([]byte, error) {
+		return output(exec.Command("xcrun", "devicectl", "list", "devices", "--json-output", "-", "-q"))
 	})
 }
 
-func parseSimulatorsWith(execCommand func() ([]byte, error)) ([]Simulator, error) {
-	output, err := execCommand()
+func parseSimulatorsWith(simctl, devicectl func() ([]byte, error)) ([]Simulator, error) {
+	output, err := simctl()
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +131,35 @@ func parseSimulatorsWith(execCommand func() ([]byte, error)) ([]Simulator, error
 	}
 	sortSimulators(simulators)
 
-	return append([]Simulator{Mac}, simulators...), nil
+	paired, _ := parseDevices(devicectl) // best effort: devicectl needs Xcode 15, simulators run without it
+	return slices.Concat([]Simulator{Mac}, paired, simulators), nil
+}
+
+// parseDevices keeps devicectl's order and drops what cannot take a build:
+// unpaired devices and unavailable ones (switched off or out of reach). An idle
+// device in reach flips between connected and disconnected; both stay.
+func parseDevices(devicectl func() ([]byte, error)) ([]Simulator, error) {
+	output, err := devicectl()
+	if err != nil {
+		return nil, err
+	}
+	var list devicectlDevices
+	if err := json.Unmarshal(output, &list); err != nil {
+		return nil, err
+	}
+	var devices []Simulator
+	for _, d := range list.Result.Devices {
+		if d.ConnectionProperties.PairingState != "paired" || d.ConnectionProperties.TunnelState == "unavailable" {
+			continue
+		}
+		devices = append(devices, Simulator{
+			Name:    d.DeviceProperties.Name,
+			Runtime: d.HardwareProperties.Platform + " " + d.DeviceProperties.OSVersionNumber,
+			UDID:    d.HardwareProperties.UDID, // xcodebuild's id; devicectl's own identifier differs
+			Device:  true,
+		})
+	}
+	return devices, nil
 }
 
 const runtimePrefix = "com.apple.CoreSimulator.SimRuntime."
@@ -155,8 +214,9 @@ func Rename(simulator Simulator, name string) error {
 	return err
 }
 
-// DefaultSimulator picks a booted iOS simulator, else the first iPhone on the
-// newest runtime. It expects the order ParseSimulators returns.
+// DefaultSimulator picks a booted iOS simulator, else the first iPhone simulator
+// on the newest runtime; a device is only ever chosen by hand. It expects the
+// order ParseSimulators returns.
 func DefaultSimulator(simulators []Simulator) (Simulator, bool) {
 	for _, s := range simulators {
 		if s.State == stateBooted && s.Platform() == "iOS" {
@@ -164,7 +224,7 @@ func DefaultSimulator(simulators []Simulator) (Simulator, bool) {
 		}
 	}
 	for _, s := range simulators {
-		if strings.HasPrefix(s.Name, "iPhone") {
+		if strings.HasPrefix(s.Name, "iPhone") && !s.Device {
 			return s, true
 		}
 	}

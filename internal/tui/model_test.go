@@ -717,6 +717,23 @@ func TestShortDuration(t *testing.T) {
 	}
 }
 
+func TestDevicesStandOut(t *testing.T) {
+	phone := xcode.Simulator{Name: "Test iPhone", Runtime: "iOS 26.7.1", UDID: "00008140-D", Device: true}
+	m := newTestModel("")
+	m, _ = update(m, simulatorsMsg{simulators: []xcode.Simulator{xcode.Mac, phone, iPhone17Pro}})
+	rows := m.simulatorRows(3, 30)
+	if !strings.Contains(rows[1], "Test iPhone 26.7.1") || !strings.Contains(rows[1], "\x1b[36m") || strings.Contains(rows[2], "\x1b[36m") {
+		t.Errorf("a device row is cyan, a simulator row is not: %q", rows)
+	}
+	if m, _ = press(m, "3", "g", "j", "R"); m.renaming.UDID != "" {
+		t.Error("a device has no simctl name to change")
+	}
+	m, _ = press(m, "space")
+	if screen := ansi.Strip(m.render()); m.simulator != phone || !strings.Contains(screen, "r run on the device") {
+		t.Errorf("the hint names the device once it is current:\n%s", screen)
+	}
+}
+
 func TestSelectionFillsTheRow(t *testing.T) {
 	m, _ := update(newTestModel(""), tea.BackgroundColorMsg{Color: color.RGBA{0xf3, 0xea, 0xd3, 0xff}})
 	rows := m.list([]item{{label: "Puzzle", style: warningStyle, index: 0}}, -1, 0, true, 1, 20)

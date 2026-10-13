@@ -1,29 +1,43 @@
 package xcode
 
 import (
+	"errors"
 	"os"
 	"reflect"
 	"slices"
 	"testing"
 )
 
+func readFixture(name string) func() ([]byte, error) {
+	return func() ([]byte, error) { return os.ReadFile("testdata/" + name) }
+}
+
 func TestSimulatorParsing(t *testing.T) {
-	simulators, err := parseSimulatorsWith(func() ([]byte, error) {
-		return os.ReadFile("testdata/simctl-list.json")
-	})
+	simulators, err := parseSimulatorsWith(readFixture("simctl-list.json"), readFixture("devicectl-list.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// My Mac first, then booted, then iOS before tvOS before watchOS.
+	// My Mac first, then paired devices in reach in devicectl's order, then
+	// simulators: booted, then iOS before tvOS before watchOS.
 	expectedSimulators := []Simulator{
 		Mac,
+		{Name: "Test iPad", Runtime: "iOS 26.3.1", UDID: "00008120-000CCCCCCCCC0032", Device: true},
+		{Name: "Test iPhone", Runtime: "iOS 26.7.1", UDID: "00008140-000DDDDDDDDD801C", Device: true},
 		{Name: "Apple TV 4K", Runtime: "tvOS 26.2", State: "Booted", UDID: "D640FDA5-7FDA-47F1-928F-E630815BB484"},
 		{Name: "iPhone 17 Pro", Runtime: "iOS 26.2", State: "Shutdown", UDID: "6AFBF4E8-BDB3-408A-9458-21A2A91D7899"},
 		{Name: "iPhone+Watch", Runtime: "iOS 26.2", State: "Shutdown", UDID: "5FE0CE7B-707A-4371-8174-6807E1D0F51B"},
 		{Name: "PairedWatch", Runtime: "watchOS 26.2", State: "Shutdown", UDID: "27E8581C-4CD7-45C3-A394-491F2E375A9F"},
 	}
 	if !reflect.DeepEqual(expectedSimulators, simulators) {
-		t.Errorf("got: %s, want: %s", simulators, expectedSimulators)
+		t.Errorf("got: %v, want: %v", simulators, expectedSimulators)
+	}
+}
+
+func TestSimulatorsWithoutDevicectl(t *testing.T) {
+	noDevicectl := func() ([]byte, error) { return nil, errors.New("xcrun: error: unable to find utility \"devicectl\"") }
+	simulators, err := parseSimulatorsWith(readFixture("simctl-list.json"), noDevicectl)
+	if err != nil || len(simulators) != 5 || slices.ContainsFunc(simulators, func(s Simulator) bool { return s.Device }) {
+		t.Errorf("got %v, %v; want My Mac and the four simulators", simulators, err)
 	}
 }
 
@@ -104,6 +118,7 @@ func TestDefaultSimulator(t *testing.T) {
 		{"a booted Apple TV does not beat an iPhone", []Simulator{bootedTV, iPad, iPhone}, iPhone, true},
 		{"first iPhone", []Simulator{iPad, iPhone}, iPhone, true},
 		{"anything when no iPhone", []Simulator{iPad}, iPad, true},
+		{"a device is never picked, even one named iPhone", []Simulator{{Name: "iPhone", Runtime: "iOS 26.7.1", Device: true}, iPad, iPhone}, iPhone, true},
 		{"none", nil, Simulator{}, false},
 	}
 
@@ -127,6 +142,10 @@ func TestDestinationPerPlatform(t *testing.T) {
 		{Simulator{Runtime: "tvOS 26.2", UDID: "B"}, "platform=tvOS Simulator,id=B", "appletvsimulator"},
 		{Simulator{Runtime: "watchOS 26.2", UDID: "C"}, "platform=watchOS Simulator,id=C", "watchsimulator"},
 		{Simulator{Runtime: "xrOS 26.0", UDID: "D"}, "platform=visionOS Simulator,id=D", "xrsimulator"},
+		{Simulator{Runtime: "iOS 26.7.1", UDID: "E", Device: true}, "platform=iOS,id=E", "iphoneos"},
+		{Simulator{Runtime: "tvOS 26.4", UDID: "F", Device: true}, "platform=tvOS,id=F", "appletvos"},
+		{Simulator{Runtime: "watchOS 26.1", UDID: "G", Device: true}, "platform=watchOS,id=G", "watchos"},
+		{Simulator{Runtime: "visionOS 26.0", UDID: "H", Device: true}, "platform=visionOS,id=H", "xros"},
 		{Mac, "platform=macOS", "macosx"},
 	}
 	for _, tt := range tests {
