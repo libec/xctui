@@ -584,7 +584,9 @@ rows of `right - 2` cells — cut at cell boundaries, spaces kept, a wide charac
 fit a row starting the next, an empty line one empty row — and styled by the line's kind (10.1);
 rows past `detailHeight` are dropped. For the console phase the time prefix
 (`^\d\d:\d\d:\d\d\.\d+ `) is dropped before wrapping while timestamps are off, and kept and
-shown dim at the start of the first row while they are on (`s`). With no
+shown dim at the start of the first row while they are on (`s`). A line a tool redrew with
+carriage returns (git's clone progress) shows only the text after its last non-trailing `\r`,
+as a terminal would: a raw `\r` sends the cursor back over the left panes. With no
 lines the single row is a hint (dim): `no line matches` when the phase has a filter,
 `No errors or warnings. i shows the full log.` in issues mode, else `waiting for output`. With
 no jobs at all: `b build · r run on the simulator · t test · c clean`, with `device` for

@@ -787,6 +787,23 @@ func TestConsoleRowsFollowTheTimestampToggle(t *testing.T) {
 	}
 }
 
+func TestCarriageReturnsShowTheLastRedraw(t *testing.T) {
+	m := newTestModel("")
+	m, _ = press(m, "b")
+	m = lines(m, "    remote: Counting objects:   0% (1/877)   \rremote: Counting objects: 100% (877/877)", "after\r")
+	screen := m.render()
+	plain := ansi.Strip(screen)
+	if strings.Contains(screen, "\r") || strings.Contains(plain, "(1/877)") ||
+		!strings.Contains(plain, "│remote: Counting objects: 100% (877/877) ") || !strings.Contains(plain, "│after ") {
+		t.Errorf("a carriage return redraws its line, so only the last drawing shows:\n%q", screen)
+	}
+
+	p := newPhase("console", layout{width: 40, height: 3, stamps: true})
+	if got := p.display("10:23:23.361 50%\r100%\r"); got != "10:23:23.361 100%" {
+		t.Errorf("a console line keeps its time through a redraw, got %q", got)
+	}
+}
+
 func TestMirroredLogLinesKeepTheirTime(t *testing.T) {
 	m := newTestModel("")
 	m, _ = press(m, "r")

@@ -97,12 +97,19 @@ func (p *phase) setLayout(l layout) {
 }
 
 // display is a line as Detail shows it: a console line loses its time prefix
-// while timestamps are off.
+// while timestamps are off, and a line redrawn with carriage returns (git's
+// progress) shows only its last drawing, as in a terminal. A raw \r would send
+// the cursor back over the left panes.
 func (p *phase) display(line string) string {
-	if p.name == "console" && !p.stamps {
-		_, line = splitStamp(line)
+	stamp, text := "", line
+	if p.name == "console" {
+		stamp, text = splitStamp(line)
+		if !p.stamps {
+			stamp = ""
+		}
 	}
-	return line
+	text = strings.TrimRight(text, "\r")
+	return stamp + text[strings.LastIndex(text, "\r")+1:]
 }
 
 // rows is how many rows of Detail a line takes once wrapped.
